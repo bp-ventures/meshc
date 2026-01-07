@@ -1,0 +1,15 @@
+# Copy this file to local_settings.py and fill in your credentials
+# Do NOT commit local_settings.py to version control
+
+MESH_CLIENT_ID = "your-client-id-here"
+MESH_CLIENT_SECRET = "your-client-secret-here"
+
+# Optional: defaults to sandbox
+# MESH_API_URL = "https://sandbox-integration-api.meshconnect.com"
+
+# Optional: fetched automatically if not set
+# MESH_STELLAR_NETWORK_ID = "06855704-43d2-4ad2-a73c-372f0c3534e1"
+
+# Optional: default transfer settings
+# MESH_TRANSFER_TYPE = "deposit"
+# MESH_ENABLE_SMART_FUNDING = True
