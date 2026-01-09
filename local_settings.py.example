@@ -16,3 +16,6 @@ MESH_CLIENT_SECRET = "your-client-secret-here"
 
 # Webhook URL for receiving transfer notifications (use webhook.site for testing)
 # MESH_WEBHOOK_URL = "https://webhook.site/your-unique-id"
+
+# Target URL for webhook_server.py to forward received webhooks to
+# WEBHOOK_TARGET = "https://webhook.site/your-unique-id"
