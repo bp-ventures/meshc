@@ -4,7 +4,7 @@
 
 set -e
 
-WEBHOOK_URL="https://webhook.site/cf69e8e5-2235-4248-a3ae-b3fc9da3685d"
+WEBHOOK_URL=$(python3 -c "import local_settings; print(local_settings.MESH_WEBHOOK_URL)" 2>/dev/null || echo "https://webhook.site/your-unique-id")
 
 echo "═══════════════════════════════════════════════════════════"
 echo "  Webhook Integration Test"
@@ -26,7 +26,7 @@ MOCK_PAYLOAD=$(cat <<'EOF'
     "networkId": "06855704-43d2-4ad2-a73c-372f0c3534e1",
     "networkTransactionId": "0xabc123def456789",
     "fromAddress": "binance_test_account",
-    "toAddress": "GCKFBEIYV2U22IO2BJ4KVJOIP7XPWQGQFKKWXR6DOSJBV7STMAQSMTGG",
+    "toAddress": "GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX",
     "note": "Manual webhook test - backend integration verified"
   }
 }
@@ -50,8 +50,9 @@ if [ "$HTTP_CODE" == "200" ] || [ "$HTTP_CODE" == "201" ]; then
     echo "🔍 Verify Receipt"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    WEBHOOK_ID="${WEBHOOK_URL##*/}"
     echo "1. Open your webhook.site dashboard:"
-    echo "   https://webhook.site/#!/view/cf69e8e5-2235-4248-a3ae-b3fc9da3685d"
+    echo "   https://webhook.site/#!/view/${WEBHOOK_ID}"
     echo ""
     echo "2. You should see a POST request with:"
     echo "   • type: \"transfer.completed\""

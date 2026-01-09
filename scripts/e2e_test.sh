@@ -11,7 +11,7 @@ echo ""
 
 # Configuration
 TX_ID="test-20260106-165724"
-WEBHOOK_URL="https://webhook.site/cf69e8e5-2235-4248-a3ae-b3fc9da3685d"
+WEBHOOK_URL=$(python3 -c "import local_settings; print(local_settings.MESH_WEBHOOK_URL)" 2>/dev/null || echo "https://webhook.site/your-unique-id")
 MESH_URL="https://sandbox-web.meshconnect.com/b2b-iframe/358ef0a7-9d16-4b55-966a-08ddde81b87e/broker-connect?auth_code=OFVsgC1y_0is-6tkdcYhBiJGTYkBOD2tye042L3xxwrjfRm0VzJCESeUCXi_5Glq7ORM8v1Ws4efIykH9_HgaA&restrictMultipleAccounts=true&link_style=eyJwYyI6IiMwMzdGRkYiLCJwdCI6IiNGRkZGRkYiLCJzYyI6IiNGM0YzRjIiLCJzdCI6IiMwMDAwMDAiLCJiciI6MjQuMDAsImlyIjoyMy4wMCwiaW8iOjAuNjAwMDAwMDAsInQiOiJsb2dvIiwiaGMiOmZhbHNlLCJ0aCI6ImxpZ2h0In0%3d"
 
 echo "📋 Test Details:"
@@ -64,9 +64,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📡 STEP 3: Check Webhook Notification"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+WEBHOOK_ID="${WEBHOOK_URL##*/}"
 echo "Open your webhook.site dashboard:"
 echo ""
-echo "  https://webhook.site/#!/view/cf69e8e5-2235-4248-a3ae-b3fc9da3685d/cf69e8e5-2235-4248-a3ae-b3fc9da3685d/1"
+echo "  https://webhook.site/#!/view/${WEBHOOK_ID}"
 echo ""
 echo "Look for a POST request with:"
 echo "  • type: \"transfer.completed\""

@@ -13,3 +13,6 @@ MESH_CLIENT_SECRET = "your-client-secret-here"
 # Optional: default transfer settings
 # MESH_TRANSFER_TYPE = "deposit"
 # MESH_ENABLE_SMART_FUNDING = True
+
+# Webhook URL for receiving transfer notifications (use webhook.site for testing)
+# MESH_WEBHOOK_URL = "https://webhook.site/your-unique-id"

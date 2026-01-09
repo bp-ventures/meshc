@@ -279,7 +279,7 @@ meshc sandbox-cex
     "networkId": "06855704-43d2-4ad2-a73c-372f0c3534e1",
     "networkTransactionId": "0xabc123...",
     "fromAddress": "...",
-    "toAddress": "GCKFBEIYV2U22IO2BJ4KVJOIP7XPWQGQFKKWXR6DOSJBV7STMAQSMTGG"
+    "toAddress": "GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX"
   }
 }
 ```
@@ -382,7 +382,7 @@ When creating a link token, use the stored token to skip the authentication UI:
 ```bash
 meshc link-token \
   --user-id test-user \
-  --address GCKFBEIYV2U22IO2BJ4KVJOIP7XPWQGQFKKWXR6DOSJBV7STMAQSMTGG \
+  --address GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX \
   --symbol USDC \
   --use-stored-tokens
 ```

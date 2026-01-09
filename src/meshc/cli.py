@@ -674,7 +674,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Test CEX (exchange) flow in sandbox"
     )
     p_cex.add_argument("--user-id", default="test-user", help="User ID (default: test-user)")
-    p_cex.add_argument("--address", default="GCKFBEIYV2U22IO2BJ4KVJOIP7XPWQGQFKKWXR6DOSJBV7STMAQSMTGG",
+    p_cex.add_argument("--address", default="GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX",
                        help="Destination address (default: test Stellar address)")
     p_cex.add_argument("--symbol", default="USDC", help="Token (default: USDC)")
     p_cex.add_argument("--amount", type=float, help="Amount")
