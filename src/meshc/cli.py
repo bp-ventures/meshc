@@ -8,6 +8,7 @@ import argparse
 import base64
 import json
 import logging
+import pathlib
 import random
 import sys
 import time
@@ -355,7 +356,43 @@ def cmd_sandbox_cex(args: argparse.Namespace) -> int:
             print()
             print(f"Check status: meshc status {transaction_id}")
 
-        if getattr(args, 'open', False):
+        if getattr(args, 'local', False):
+            # Serve local HTML frontend via HTTP (required for ES module imports)
+            html_dir = pathlib.Path(__file__).parent.parent.parent / 'web'
+            if not (html_dir / 'link.html').exists():
+                print(f"\nError: Local frontend not found at {html_dir / 'link.html'}", file=sys.stderr)
+                print("Run from the meshc repo directory or install web/link.html", file=sys.stderr)
+            else:
+                import http.server
+                import socketserver
+                import threading
+
+                port = 8092
+                local_url = f"http://localhost:{port}/link.html?link_token={result.token}"
+
+                # Start HTTP server in background thread
+                class QuietHandler(http.server.SimpleHTTPRequestHandler):
+                    def __init__(self, *args, **kwargs):
+                        super().__init__(*args, directory=str(html_dir), **kwargs)
+                    def log_message(self, format, *args):
+                        pass  # Suppress request logging
+
+                httpd = socketserver.TCPServer(("", port), QuietHandler)
+                server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+                server_thread.start()
+
+                print()
+                print(f"Serving local frontend at http://localhost:{port}/")
+                print("Opening browser...")
+                webbrowser.open(local_url)
+
+                print("Press Ctrl+C to stop the server")
+                try:
+                    server_thread.join()
+                except KeyboardInterrupt:
+                    print("\nShutting down server...")
+                    httpd.shutdown()
+        elif getattr(args, 'open', False):
             print()
             print("Opening in browser...")
             webbrowser.open(url)
@@ -652,6 +689,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Use wallet mode (Sepolia testnet) instead of CEX")
     p_cex.add_argument("--instructions", action="store_true", help="Show testing instructions")
     p_cex.add_argument("--open", action="store_true", help="Automatically open URL in browser")
+    p_cex.add_argument("--local", action="store_true", help="Open local HTML frontend instead of Mesh UI")
     p_cex.set_defaults(func=cmd_sandbox_cex)
 
     # errors

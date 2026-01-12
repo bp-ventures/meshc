@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mesh Connect - Local</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #f5f5f5;
+      color: #333;
+    }
+    h1 { color: #1a1a2e; margin-bottom: 0.5rem; }
+    .subtitle { color: #666; margin-bottom: 2rem; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .status { font-size: 1.1rem; }
+    .status.loading { color: #666; }
+    .status.success { color: #2e7d32; }
+    .status.error { color: #c62828; }
+    .result { margin-top: 1rem; }
+    .result h3 { margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666; }
+    pre {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    .token-preview {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #666;
+      word-break: break-all;
+    }
+    .events { margin-top: 1rem; }
+    .event {
+      padding: 0.5rem;
+      margin: 0.25rem 0;
+      border-left: 3px solid #ddd;
+      font-size: 0.85rem;
+    }
+    .event.connected { border-color: #4caf50; }
+    .event.transfer { border-color: #2196f3; }
+    .event.exit { border-color: #ff9800; }
+    .event.error { border-color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>Mesh Connect</h1>
+  <p class="subtitle">Local Frontend for meshc CLI</p>
+
+  <div class="card">
+    <div id="status" class="status loading">Initializing...</div>
+    <div id="token-info" class="token-preview"></div>
+  </div>
+
+  <div id="results" style="display: none;">
+    <div class="card">
+      <div class="events" id="events"></div>
+    </div>
+    <div class="card result" id="payload-card" style="display: none;">
+      <h3>Integration Connected</h3>
+      <pre id="payload"></pre>
+    </div>
+    <div class="card result" id="transfer-card" style="display: none;">
+      <h3>Transfer Result</h3>
+      <pre id="transfer"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    // ---------------------------------------------------------------------
+    // Mesh Connect Local Frontend
+    // Reads link_token from URL params, initializes SDK, displays results
+    // ---------------------------------------------------------------------
+
+    const statusEl = document.getElementById('status');
+    const tokenInfoEl = document.getElementById('token-info');
+    const resultsEl = document.getElementById('results');
+    const eventsEl = document.getElementById('events');
+    const payloadEl = document.getElementById('payload');
+    const payloadCard = document.getElementById('payload-card');
+    const transferEl = document.getElementById('transfer');
+    const transferCard = document.getElementById('transfer-card');
+
+    function setStatus(msg, type = 'loading') {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${type}`;
+    }
+
+    function addEvent(msg, type = '') {
+      resultsEl.style.display = 'block';
+      const div = document.createElement('div');
+      div.className = `event ${type}`;
+      div.textContent = `${new Date().toLocaleTimeString()} - ${msg}`;
+      eventsEl.appendChild(div);
+    }
+
+    function showPayload(data) {
+      payloadCard.style.display = 'block';
+      payloadEl.textContent = JSON.stringify(data, null, 2);
+    }
+
+    function showTransfer(data) {
+      transferCard.style.display = 'block';
+      transferEl.textContent = JSON.stringify(data, null, 2);
+    }
+
+    // Get link_token from URL
+    const params = new URLSearchParams(window.location.search);
+    const linkToken = params.get('link_token');
+
+    if (!linkToken) {
+      setStatus('Error: No link_token provided in URL', 'error');
+      tokenInfoEl.textContent = 'Usage: link.html?link_token=YOUR_TOKEN';
+    } else {
+      tokenInfoEl.textContent = `Token: ${linkToken.slice(0, 40)}...`;
+      setStatus('Loading Mesh SDK...', 'loading');
+
+      // Load SDK and initialize (esm.sh handles transitive dependencies)
+      import('https://esm.sh/@meshconnect/web-link-sdk')
+        .then(({ createLink }) => {
+          setStatus('SDK loaded. Opening Mesh Link...', 'loading');
+          addEvent('SDK loaded successfully');
+
+          const link = createLink({
+            clientId: 'local-meshc',  // Ignored when linkToken provided
+
+            onIntegrationConnected: (payload) => {
+              console.log('[MESH] Integration connected:', payload);
+              addEvent(`Connected to ${payload.brokerName || 'integration'}`, 'connected');
+              showPayload(payload);
+              setStatus('Integration connected!', 'success');
+            },
+
+            onTransferFinished: (payload) => {
+              console.log('[MESH] Transfer finished:', payload);
+              const status = payload.status || 'unknown';
+              addEvent(`Transfer ${status}: ${payload.amount || ''} ${payload.symbol || ''}`, 'transfer');
+              showTransfer(payload);
+              if (status === 'success') {
+                setStatus('Transfer completed successfully!', 'success');
+              } else {
+                setStatus(`Transfer ${status}`, status === 'failed' ? 'error' : 'loading');
+              }
+            },
+
+            onExit: (error, summary) => {
+              console.log('[MESH] Exit:', { error, summary });
+              if (error) {
+                addEvent(`Error: ${error}`, 'error');
+                setStatus(`Error: ${error}`, 'error');
+              } else {
+                addEvent('User closed Mesh Link', 'exit');
+                if (statusEl.className.includes('loading')) {
+                  setStatus('Mesh Link closed', 'loading');
+                }
+              }
+            },
+
+            onEvent: (event) => {
+              console.log('[MESH] Event:', event);
+              // Log select events for visibility
+              if (event.type === 'pageLoaded') {
+                addEvent(`Page: ${event.payload?.page || 'unknown'}`);
+              } else if (event.type === 'transferExecuted') {
+                addEvent('Transfer executed', 'transfer');
+              }
+            }
+          });
+
+          // Open the link
+          link.openLink(linkToken);
+          addEvent('Mesh Link opened');
+
+        })
+        .catch((err) => {
+          console.error('Failed to load SDK:', err);
+          setStatus(`Failed to load SDK: ${err.message}`, 'error');
+          addEvent(`SDK load error: ${err.message}`, 'error');
+        });
+    }
+  </script>
+</body>
+</html>
