@@ -531,6 +531,7 @@ def create_sandbox_cex_token(
     amount: float | None = None,
     *,
     network_id: str | None = None,
+    transfer_type: str = "deposit",
     transaction_id: str | None = None,
     client_fee: float | None = None,
     enable_smart_funding: bool = True,
@@ -552,6 +553,7 @@ def create_sandbox_cex_token(
         symbol: Token symbol (default: USDC)
         amount: Optional transfer amount
         network_id: Network ID (defaults to Stellar)
+        transfer_type: "deposit" or "payment" (default: deposit)
         transaction_id: Your transaction ID for reconciliation
         client_fee: Your fee as decimal (0.025 = 2.5%)
         enable_smart_funding: Auto-convert user's other tokens (default: True)
@@ -579,6 +581,7 @@ def create_sandbox_cex_token(
         client_secret=client_secret,
         user_id=user_id,
         to_addresses=[addr],
+        transfer_type=transfer_type,
         transaction_id=transaction_id,
         client_fee=client_fee,
         enable_smart_funding=enable_smart_funding,

@@ -9,7 +9,6 @@ from meshc import (
     create_link_token,
     get_account_tokens_for_user,
     get_networks,
-    get_stellar_network_id,
 )
 from meshc.storage import init_db, store_token
 
@@ -74,31 +73,6 @@ class TestGetNetworks:
         assert len(networks) == 2
         assert networks[0].name == "Stellar"
         assert "USDC" in networks[0].tokens
-
-
-class TestGetStellarNetworkId:
-    def test_success(self, httpx_mock: HTTPXMock, mock_config, mock_networks_response):
-        httpx_mock.add_response(json=mock_networks_response)
-
-        network_id = get_stellar_network_id(
-            client_id=mock_config["client_id"],
-            client_secret=mock_config["client_secret"],
-            api_url=mock_config["api_url"],
-        )
-
-        assert network_id == "06855704-43d2-4ad2-a73c-372f0c3534e1"
-
-    def test_not_found(self, httpx_mock: HTTPXMock, mock_config):
-        httpx_mock.add_response(json={"content": {"networks": []}})
-
-        with pytest.raises(MeshAPIError) as exc:
-            get_stellar_network_id(
-                client_id=mock_config["client_id"],
-                client_secret=mock_config["client_secret"],
-                api_url=mock_config["api_url"],
-            )
-
-        assert "not found" in str(exc.value).lower()
 
 
 class TestAccountToken:

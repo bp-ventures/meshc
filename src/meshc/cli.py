@@ -24,7 +24,6 @@ from .core import (
     create_sandbox_wallet_token,
     get_account_tokens_for_user,
     get_networks,
-    get_stellar_network_id,
     get_transfer_status,
     print_sandbox_instructions,
     simulate_deposit,
@@ -123,6 +122,7 @@ def cmd_link_token(args: argparse.Namespace) -> int:
             to_addresses=[to_address],
             transfer_type=args.transfer_type,
             transaction_id=args.transaction_id,
+            enable_smart_funding=getattr(args, "smart_funding", True),
             integration_id=args.integration_id,
             client_fee=getattr(args, "client_fee", None),
             amount_in_fiat=getattr(args, "amount_in_fiat", None),
@@ -223,28 +223,6 @@ def cmd_networks(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stellar_id(args: argparse.Namespace) -> int:
-    """Get Stellar network ID."""
-    try:
-        config = load_config()
-    except MeshConfigError as e:
-        _error(str(e))
-        return 1
-
-    try:
-        network_id = get_stellar_network_id(
-            client_id=config["client_id"],
-            client_secret=config["client_secret"],
-            api_url=config["api_url"],
-        )
-    except MeshAPIError as e:
-        _error(str(e))
-        return 1
-
-    print(network_id)
-    return 0
-
-
 def cmd_mock_deposit(args: argparse.Namespace) -> int:
     """Simulate a deposit flow."""
     try:
@@ -284,36 +262,59 @@ def cmd_mock_deposit(args: argparse.Namespace) -> int:
 
 
 def cmd_sandbox_cex(args: argparse.Namespace) -> int:
-    """Test CEX (exchange) flow in sandbox."""
+    """Test CEX (exchange) or wallet flow in sandbox."""
     try:
         config = load_config()
     except MeshConfigError as e:
         _error(str(e))
         return 1
 
+    wallet_mode = getattr(args, 'wallet', False)
+
     # Print instructions if requested
     if args.instructions:
-        print(print_sandbox_instructions("cex"))
+        print(print_sandbox_instructions("wallet" if wallet_mode else "cex"))
         return 0
 
-    # Generate transaction ID if not provided
+    # Wallet mode validation
+    default_stellar_address = "GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX"
+    if wallet_mode and (not args.address or args.address == default_stellar_address):
+        _error("--wallet mode requires --address with an Ethereum address (0x...)")
+        return 1
+
+    # Generate transaction ID if not provided (CEX mode only)
     transaction_id = getattr(args, 'transaction_id', None) or _generate_transaction_id()
 
     try:
-        result = create_sandbox_cex_token(
-            client_id=config["client_id"],
-            client_secret=config["client_secret"],
-            user_id=args.user_id,
-            to_address=args.address,
-            symbol=args.symbol,
-            amount=args.amount,
-            network_id=getattr(args, 'network_id', None),
-            transaction_id=transaction_id,
-            client_fee=getattr(args, 'client_fee', None),
-            enable_smart_funding=getattr(args, 'smart_funding', True),
-            lang=getattr(args, 'lang', None),
-            api_url=config["api_url"],
-        )
+        if wallet_mode:
+            # Wallet mode: Sepolia testnet
+            symbol = args.symbol if args.symbol != "USDC" else "SEPOLIAETH"
+            result = create_sandbox_wallet_token(
+                client_id=config["client_id"],
+                client_secret=config["client_secret"],
+                user_id=args.user_id,
+                to_address=args.address,
+                symbol=symbol,
+                amount=args.amount,
+                api_url=config["api_url"],
+            )
+        else:
+            # CEX mode: Stellar testnet (default)
+            result = create_sandbox_cex_token(
+                client_id=config["client_id"],
+                client_secret=config["client_secret"],
+                user_id=args.user_id,
+                to_address=args.address,
+                symbol=args.symbol,
+                amount=args.amount,
+                network_id=getattr(args, 'network_id', None),
+                transfer_type=getattr(args, 'transfer_type', 'deposit'),
+                transaction_id=transaction_id,
+                client_fee=getattr(args, 'client_fee', None),
+                enable_smart_funding=getattr(args, 'smart_funding', True),
+                lang=getattr(args, 'lang', None),
+                api_url=config["api_url"],
+            )
     except MeshAPIError as e:
         _error(str(e))
         if e.error_code:
@@ -322,77 +323,37 @@ def cmd_sandbox_cex(args: argparse.Namespace) -> int:
 
     if args.json:
         output = result.raw.copy()
-        output["transactionId"] = transaction_id
+        if not wallet_mode:
+            output["transactionId"] = transaction_id
         _output(output, as_json=True)
     else:
         url = _decode_link_token(result.token)
 
-        print("SANDBOX CEX TEST")
-        print("=" * 40)
-        print(f"Transaction ID: {transaction_id}")
-        print(f"Link URL: {url}")
-        print()
-        print("Next steps:")
-        print("1. Select any exchange (Coinbase, Binance, etc.)")
-        print("2. Use credentials displayed (e.g., MeshUser/rPpass123)")
-        print("3. Complete the mocked transfer flow")
-        print()
-        print(f"Check status: meshc status {transaction_id}")
-
-        if getattr(args, 'open', False):
+        if wallet_mode:
+            print("SANDBOX WALLET TEST (Sepolia Testnet)")
+            print("=" * 40)
+            print(f"Link URL: {url}")
             print()
-            print("Opening in browser...")
-            webbrowser.open(url)
-
-    return 0
-
-
-def cmd_sandbox_wallet(args: argparse.Namespace) -> int:
-    """Test wallet (on-chain) flow in sandbox using Sepolia testnet."""
-    try:
-        config = load_config()
-    except MeshConfigError as e:
-        _error(str(e))
-        return 1
-
-    # Print instructions if requested
-    if args.instructions:
-        print(print_sandbox_instructions("wallet"))
-        return 0
-
-    try:
-        result = create_sandbox_wallet_token(
-            client_id=config["client_id"],
-            client_secret=config["client_secret"],
-            user_id=args.user_id,
-            to_address=args.address,
-            symbol=args.symbol,
-            amount=args.amount,
-            api_url=config["api_url"],
-        )
-    except MeshAPIError as e:
-        _error(str(e))
-        if e.error_code:
-            print(f"  Hint: {get_error_description(e.error_code)}", file=sys.stderr)
-        return 1
-
-    if args.json:
-        _output(result.raw, as_json=True)
-    else:
-        url = _decode_link_token(result.token)
-
-        print("SANDBOX WALLET TEST (Sepolia Testnet)")
-        print("=" * 40)
-        print(f"Link URL: {url}")
-        print()
-        print("Prerequisites:")
-        print("1. Get Sepolia ETH: https://cloud.google.com/application/web3/faucet/ethereum/sepolia")
-        print("2. Send to your MetaMask/Rainbow wallet")
-        print()
-        print("Next steps:")
-        print("1. Select MetaMask or Rainbow")
-        print("2. Approve the on-chain transaction")
-        print("3. Verify at: https://sepolia.etherscan.io")
+            print("Prerequisites:")
+            print("1. Get Sepolia ETH: https://cloud.google.com/application/web3/faucet/ethereum/sepolia")
+            print("2. Send to your MetaMask/Rainbow wallet")
+            print()
+            print("Next steps:")
+            print("1. Select MetaMask or Rainbow")
+            print("2. Approve the on-chain transaction")
+            print("3. Verify at: https://sepolia.etherscan.io")
+        else:
+            print("SANDBOX CEX TEST")
+            print("=" * 40)
+            print(f"Transaction ID: {transaction_id}")
+            print(f"Link URL: {url}")
+            print()
+            print("Next steps:")
+            print("1. Select any exchange (Coinbase, Binance, etc.)")
+            print("2. Use credentials displayed (e.g., MeshUser/rPpass123)")
+            print("3. Complete the mocked transfer flow")
+            print()
+            print(f"Check status: meshc status {transaction_id}")
 
         if getattr(args, 'open', False):
             print()
@@ -640,6 +601,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_link.add_argument("--amount-in-fiat", type=float, help="Amount in USD (converts to crypto)")
     p_link.add_argument("--inclusive-fee", action="store_true", help="Include fee in displayed amount")
     p_link.add_argument("--use-stored-tokens", action="store_true", help="Use stored tokens to skip re-auth")
+    p_link.add_argument("--smart-funding", dest="smart_funding", action="store_true",
+                        default=True, help="Enable SmartFunding (default)")
+    p_link.add_argument("--no-smart-funding", dest="smart_funding", action="store_false",
+                        help="Disable SmartFunding")
     p_link.set_defaults(func=cmd_link_token)
 
     # status
@@ -654,10 +619,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_nets.add_argument("--filter", help="Filter by name")
     p_nets.set_defaults(func=cmd_networks)
 
-    # stellar-id
-    p_stellar = subparsers.add_parser("stellar-id", parents=[common], help="Get Stellar network ID")
-    p_stellar.set_defaults(func=cmd_stellar_id)
-
     # mock-deposit
     p_mock = subparsers.add_parser("mock-deposit", parents=[common], help="Simulate a deposit")
     p_mock.add_argument("--user-id", required=True, help="User identifier")
@@ -668,17 +629,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_mock.add_argument("--delay", type=float, default=2.0, help="Simulated delay")
     p_mock.set_defaults(func=cmd_mock_deposit)
 
-    # sandbox-cex
+    # sandbox-cex (also supports --wallet for Sepolia testnet)
     p_cex = subparsers.add_parser(
         "sandbox-cex", parents=[common],
-        help="Test CEX (exchange) flow in sandbox"
+        help="Test CEX (exchange) or wallet flow in sandbox"
     )
     p_cex.add_argument("--user-id", default="test-user", help="User ID (default: test-user)")
     p_cex.add_argument("--address", default="GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX",
                        help="Destination address (default: test Stellar address)")
-    p_cex.add_argument("--symbol", default="USDC", help="Token (default: USDC)")
+    p_cex.add_argument("--symbol", default="USDC", help="Token (default: USDC, or SEPOLIAETH for --wallet)")
     p_cex.add_argument("--amount", type=float, help="Amount")
     p_cex.add_argument("--network-id", help="Network ID (default: Stellar)")
+    p_cex.add_argument("--transfer-type", default="deposit", help="Transfer type: deposit or payment")
     p_cex.add_argument("--transaction-id", help="Your transaction ID (auto-generated if not provided)")
     p_cex.add_argument("--client-fee", type=float, help="Your fee as decimal (0.025 = 2.5%%)")
     p_cex.add_argument("--smart-funding", dest="smart_funding", action="store_true", default=True,
@@ -686,23 +648,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_cex.add_argument("--no-smart-funding", dest="smart_funding", action="store_false",
                        help="Disable SmartFunding")
     p_cex.add_argument("--lang", help="UI language code (en, fr, es, de, ja)")
+    p_cex.add_argument("--wallet", action="store_true",
+                       help="Use wallet mode (Sepolia testnet) instead of CEX")
     p_cex.add_argument("--instructions", action="store_true", help="Show testing instructions")
     p_cex.add_argument("--open", action="store_true", help="Automatically open URL in browser")
     p_cex.set_defaults(func=cmd_sandbox_cex)
-
-    # sandbox-wallet
-    p_wallet = subparsers.add_parser(
-        "sandbox-wallet", parents=[common],
-        help="Test wallet flow in sandbox (Sepolia testnet)"
-    )
-    p_wallet.add_argument("--user-id", default="test-user", help="User ID (default: test-user)")
-    p_wallet.add_argument("--address", required=True, help="Ethereum address (0x...)")
-    p_wallet.add_argument("--symbol", default="SEPOLIAETH",
-                          help="Token (default: SEPOLIAETH, also: PYUSD, USDG)")
-    p_wallet.add_argument("--amount", type=float, help="Amount")
-    p_wallet.add_argument("--instructions", action="store_true", help="Show testing instructions")
-    p_wallet.add_argument("--open", action="store_true", help="Automatically open URL in browser")
-    p_wallet.set_defaults(func=cmd_sandbox_wallet)
 
     # errors
     p_errors = subparsers.add_parser("errors", help="List known error codes")
