@@ -101,6 +101,6 @@ LOG_READER_DIR_PATH = BASE_DIR / 'logs'
 LOG_READER_FILES_PATTERN = '*.log'
 LOG_READER_MAX_READ_LINES = 1000
 
-# Webhook IP allowlist (Mesh production IP)
+# Webhook IP allowlist (localhost for dev, Mesh production IP)
 # Override with WEBHOOK_ALLOWED_IPS env var (comma-separated)
-WEBHOOK_ALLOWED_IPS = os.environ.get('WEBHOOK_ALLOWED_IPS', '20.22.113.37').split(',')
+WEBHOOK_ALLOWED_IPS = os.environ.get('WEBHOOK_ALLOWED_IPS', '127.0.0.1,20.22.113.37').split(',')

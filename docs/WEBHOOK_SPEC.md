@@ -33,13 +33,14 @@ The `meshsbox` Django app receives Mesh Connect webhook events. One record per `
 **Setting**: `WEBHOOK_ALLOWED_IPS`
 
 ```python
-# Default: Mesh production IP
-WEBHOOK_ALLOWED_IPS = ['20.22.113.37']
+# Default: localhost (dev) + Mesh production IP
+WEBHOOK_ALLOWED_IPS = ['127.0.0.1', '20.22.113.37']
 ```
 
 **Override via environment**:
 ```bash
-WEBHOOK_ALLOWED_IPS=127.0.0.1,20.22.113.37 python manage.py runserver
+# Production only (disable localhost)
+WEBHOOK_ALLOWED_IPS=20.22.113.37 python manage.py runserver
 ```
 
 ---
@@ -98,17 +99,27 @@ Full payload stored in `history` array for audit trail.
 # Run migrations
 python manage.py migrate meshsbox
 
-# Start server (allow localhost for dev)
-WEBHOOK_ALLOWED_IPS=127.0.0.1,20.22.113.37 python manage.py runserver
+# Deploy (runs on port 10409)
+./deploy.sh
 
-# Test with mock webhook
-python scripts/mock_webhook.py --status Pending
-python scripts/mock_webhook.py --status Succeeded  # Same txid → appends
+# Test against dev server (default)
+curl -X POST https://meshcdev.bpventures.us/meshc/api/webhook/ \
+  -H "Content-Type: application/json" \
+  -d '{"TransactionId": "test123", "TransferStatus": "Pending", "Token": "USDC"}'
 
-# Run tests
+# Or test locally (port 10409 from deploy.sh)
+curl -X POST http://localhost:10409/meshc/api/webhook/ \
+  -H "Content-Type: application/json" \
+  -d '{"TransactionId": "test123", "TransferStatus": "Pending", "Token": "USDC"}'
+
+# Using mock_webhook.py
+python scripts/mock_webhook.py --status Pending --webhook-url https://meshcdev.bpventures.us/meshc/api/webhook/
+python scripts/mock_webhook.py --status Succeeded --webhook-url https://meshcdev.bpventures.us/meshc/api/webhook/
+
+# Run unit tests
 python manage.py test meshsbox
 
-# Admin (create superuser first)
-python manage.py createsuperuser
-# http://localhost:8000/admin/meshsbox/meshwebhook/
+# Admin
+# https://meshcdev.bpventures.us/admin/meshsbox/meshwebhook/
+# Local: http://localhost:10409/admin/meshsbox/meshwebhook/
 ```
