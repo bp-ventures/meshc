@@ -189,23 +189,52 @@
             resultJson.textContent = JSON.stringify(p, null, 2);
             resultsEl.style.display = 'block';
 
+            // Debug: log full response to see structure
+            console.log('onTransferFinished payload:', JSON.stringify(p, null, 2));
+
             // Save token for Easy Relogin if enabled and transfer succeeded
             if (easyRelogin && p.status === 'success') {
+              console.log('Easy Relogin: attempting to save token...');
               try {
-                // Extract token from accessToken response
-                const accessToken = p.accessToken;
-                if (accessToken?.accountTokens?.[0]) {
-                  const tokenData = accessToken.accountTokens[0];
-                  await fetch('/meshc/api/save-token/', {
+                // Try multiple possible locations for token data
+                let tokenId = null;
+                let brokerName = p.brokerName || 'Unknown';
+
+                // Option 1: accessToken.accountTokens[0].accessToken
+                if (p.accessToken?.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accessToken.accountTokens[0].accessToken;
+                  brokerName = p.accessToken.brokerName || brokerName;
+                  console.log('Found token in accessToken.accountTokens[0]');
+                }
+                // Option 2: direct accessToken field
+                else if (p.accessToken?.accessToken) {
+                  tokenId = p.accessToken.accessToken;
+                  console.log('Found token in accessToken.accessToken');
+                }
+                // Option 3: accountTokens at top level
+                else if (p.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accountTokens[0].accessToken;
+                  console.log('Found token in accountTokens[0]');
+                }
+                // Option 4: tokenId field directly
+                else if (p.tokenId) {
+                  tokenId = p.tokenId;
+                  console.log('Found token in tokenId');
+                }
+
+                if (tokenId) {
+                  const saveResp = await fetch('/meshc/api/save-token/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      token_id: tokenData.accessToken,
-                      integration_type: accessToken.brokerName || p.brokerName || 'Unknown',
+                      token_id: tokenId,
+                      integration_type: brokerName,
                       user_id: userAddress,
                     }),
                   });
-                  console.log('Easy Relogin: token saved for', userAddress);
+                  console.log('Easy Relogin: token saved!', await saveResp.json());
+                } else {
+                  console.warn('Easy Relogin: no token found in response. Keys:', Object.keys(p));
                 }
               } catch (saveErr) {
                 console.warn('Easy Relogin: failed to save token', saveErr);
