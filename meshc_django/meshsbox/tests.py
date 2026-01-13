@@ -1,7 +1,7 @@
 """Tests for meshsbox Django app."""
 import json
 from unittest.mock import patch, MagicMock
-from django.test import SimpleTestCase, Client
+from django.test import SimpleTestCase, TestCase, Client, override_settings
 
 
 class IndexViewTests(SimpleTestCase):
@@ -65,3 +65,88 @@ class ApiLinkTokenTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         mock_create.assert_called_once()
+
+
+@override_settings(WEBHOOK_ALLOWED_IPS=['127.0.0.1'])
+class WebhookApiTests(TestCase):
+    """Tests for webhook endpoint."""
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_requires_post(self):
+        """GET should be rejected."""
+        response = self.client.get('/meshc/api/webhook/')
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_json(self):
+        """Non-JSON body rejected."""
+        response = self.client.post('/meshc/api/webhook/', data='not json', content_type='text/plain')
+        self.assertEqual(response.status_code, 400)
+
+    def test_requires_transaction_id(self):
+        """Missing TransactionId rejected."""
+        response = self.client.post('/meshc/api/webhook/',
+            data=json.dumps({"TransferStatus": "Pending"}), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("TransactionId", response.json()["error"])
+
+    def test_requires_transfer_status(self):
+        """Missing TransferStatus rejected."""
+        response = self.client.post('/meshc/api/webhook/',
+            data=json.dumps({"TransactionId": "bpv123"}), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("TransferStatus", response.json()["error"])
+
+    def test_creates_webhook_record(self):
+        """First webhook creates record."""
+        payload = {
+            "TransactionId": "bpv123456",
+            "TransferStatus": "Pending",
+            "Token": "USDC",
+            "Chain": "Stellar",
+            "DestinationAddress": "GBXYTEST...",
+            "SourceAccountProvider": "Coinbase",
+            "SourceAmount": 50.0,
+        }
+        response = self.client.post('/meshc/api/webhook/',
+            data=json.dumps(payload), content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+
+        from meshsbox.models import MeshWebhook
+        webhook = MeshWebhook.objects.get(transaction_id="bpv123456")
+        self.assertEqual(webhook.status, "Pending")
+        self.assertEqual(webhook.token, "USDC")
+        self.assertEqual(len(webhook.history), 1)
+
+    def test_appends_to_existing_record(self):
+        """Second webhook updates existing record."""
+        tx_id = "bpv999888"
+
+        # First webhook: Pending
+        self.client.post('/meshc/api/webhook/',
+            data=json.dumps({"TransactionId": tx_id, "TransferStatus": "Pending", "Token": "ETH"}),
+            content_type='application/json')
+
+        # Second webhook: Succeeded with TxHash
+        self.client.post('/meshc/api/webhook/',
+            data=json.dumps({"TransactionId": tx_id, "TransferStatus": "Succeeded", "Token": "ETH", "TxHash": "0xabc123"}),
+            content_type='application/json')
+
+        from meshsbox.models import MeshWebhook
+        webhook = MeshWebhook.objects.get(transaction_id=tx_id)
+
+        self.assertEqual(webhook.status, "Succeeded")  # Updated
+        self.assertEqual(webhook.tx_hash, "0xabc123")  # Updated
+        self.assertEqual(len(webhook.history), 2)  # Appended
+        self.assertEqual(webhook.history[0]["TransferStatus"], "Pending")
+        self.assertEqual(webhook.history[1]["TransferStatus"], "Succeeded")
+
+    @override_settings(WEBHOOK_ALLOWED_IPS=['10.0.0.1'])
+    def test_ip_filter_blocks_unauthorized(self):
+        """Requests from non-allowed IPs are blocked."""
+        response = self.client.post('/meshc/api/webhook/',
+            data=json.dumps({"TransactionId": "bpv111", "TransferStatus": "Pending"}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 403)
