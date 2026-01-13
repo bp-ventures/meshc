@@ -57,7 +57,7 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Logging configuration with rotation (10MB max, keep 5 backups)
+# Logging configuration with daily rotation (never delete old logs)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -70,10 +70,10 @@ LOGGING = {
     'handlers': {
         'file': {
             'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
             'filename': BASE_DIR / 'logs' / 'django.log',
-            'maxBytes': 10 * 1024 * 1024,  # 10MB
-            'backupCount': 5,              # Keep 5 rotated files
+            'when': 'midnight',            # Rotate daily at midnight
+            'backupCount': 0,              # Never delete old logs
             'formatter': 'verbose',
         },
         'console': {
