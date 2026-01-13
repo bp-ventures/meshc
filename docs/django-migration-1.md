@@ -8,7 +8,7 @@ A self-service web frontend for generating Mesh link tokens. Users fill a form, 
 - **No DRF** - Plain Django views with `JsonResponse`. Two endpoints don't need a framework.
 - **No Auth** - Sandbox/dev tool. Add authentication before production use.
 - **No Database** - Stateless. Token storage stays in CLI via Peewee.
-- **Separate from CLI** - Django is self-service; CLI `--local` uses `web/link.html`.
+- **Separate from CLI** - Django is self-service web UI; CLI uses `--open` to launch Mesh UI directly.
 
 ---
 
