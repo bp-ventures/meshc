@@ -67,9 +67,27 @@ def init_token_storage() -> None:
 
 
 def _load_local_settings() -> dict[str, Any]:
-    """Load settings from local_settings.py in current directory."""
-    settings_path = Path.cwd() / "local_settings.py"
-    if not settings_path.is_file():
+    """Load settings from local_settings.py.
+
+    Search order:
+    1. Current working directory
+    2. Parent directories (up to 3 levels, for Django apps in subdirs)
+    """
+    # Search cwd and up to 3 parent directories
+    search_dirs = [Path.cwd()]
+    for i in range(1, 4):
+        parent = Path.cwd().parents[i - 1] if i <= len(Path.cwd().parents) else None
+        if parent:
+            search_dirs.append(parent)
+
+    settings_path = None
+    for search_dir in search_dirs:
+        candidate = search_dir / "local_settings.py"
+        if candidate.is_file():
+            settings_path = candidate
+            break
+
+    if settings_path is None:
         return {}
 
     # Import the module
