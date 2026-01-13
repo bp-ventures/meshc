@@ -1,0 +1,44 @@
+{
+  "name": "@meshconnect/react-exmaple",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@meshconnect/node-api": "*",
+    "@meshconnect/solana-web3.js": "*",
+    "@meshconnect/web-link-sdk": "*",
+    "@types/react": "^18.0.9",
+    "@types/react-dom": "^18.0.4",
+    "axios": "^1.12.2",
+    "react": "^18.1.0",
+    "react-dom": "^18.1.0",
+    "localforage": "^1.10.0"
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit --skipLibCheck"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^7.23.0",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-prettier": "^3.4.0",
+    "eslint-plugin-react": "^7.23.1",
+    "eslint-plugin-react-hooks": "^4.2.0",
+    "prettier": "^2.2.1",
+    "vite": "^5.4.21"
+  }
+}
