@@ -35,6 +35,7 @@ dev = [
 ]
 django = [
     "Django>=4.2,<5.0",
+    "django-log-reader>=1.1.9",
 ]
 
 [project.scripts]
