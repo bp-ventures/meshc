@@ -3,6 +3,7 @@
 Endpoints:
 - GET /meshc/ - Self-service form
 - POST /meshc/api/link-token/ - Generate link token
+- POST /meshc/api/save-token/ - Save integration token for Easy Relogin
 - POST /meshc/api/webhook/ - Receive Mesh webhook events
 """
 import json
@@ -89,6 +90,49 @@ def api_link_token(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_POST
+def api_save_token(request):
+    """Save integration token for Easy Relogin.
+
+    POST /meshc/api/save-token/
+    {
+        "token_id": "tok_...",           # Required: Mesh access token
+        "integration_type": "Coinbase",  # Required: broker name
+        "user_id": "GBXY..."             # Required: stellar/wallet address
+    }
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    token_id = data.get('token_id')
+    integration_type = data.get('integration_type')
+    user_id = data.get('user_id')
+
+    if not token_id or not integration_type or not user_id:
+        return JsonResponse({'error': 'token_id, integration_type, and user_id are required'}, status=400)
+
+    from .models import IntegrationToken
+
+    token, created = IntegrationToken.objects.update_or_create(
+        token_id=token_id,
+        integration_type=integration_type,
+        defaults={
+            'user_id': user_id,
+            'status': 'active',
+            'scope': 'read',
+            'lang': 'en',
+        }
+    )
+
+    action = 'created' if created else 'updated'
+    logger.info("save-token: %s token=%s type=%s user=%s", action, token_id[:12], integration_type, user_id[:12])
+
+    return JsonResponse({'status': 'saved', 'action': action})
 
 
 @csrf_exempt

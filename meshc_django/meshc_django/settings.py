@@ -18,7 +18,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'log_reader.apps.LogReaderConfig',
+    # 'log_reader.apps.LogReaderConfig',  # Optional: pip install django-log-reader
     'meshsbox',
 ]
 

@@ -42,6 +42,9 @@
     }
     .symbol-icon { width: 24px; height: 24px; flex-shrink: 0; }
     .symbol-icon svg { width: 100%; height: 100%; }
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+    .checkbox-row input[type="checkbox"] { width: auto; margin: 0; }
+    .checkbox-row label { margin: 0; font-weight: normal; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -70,6 +73,11 @@
         <option value="false">CEX (Stellar testnet)</option>
         <option value="true">Wallet (Sepolia testnet)</option>
       </select>
+
+      <div class="checkbox-row">
+        <input type="checkbox" name="easy_relogin" id="easy_relogin" checked>
+        <label for="easy_relogin">Easy Relogin (save credentials for faster access)</label>
+      </div>
 
       <button type="submit" id="submit-btn">Connect</button>
     </form>
@@ -149,8 +157,11 @@
       setStatus('Requesting token...', 'loading');
 
       const fd = new FormData(form);
+      const userAddress = fd.get('address');
+      const easyRelogin = fd.get('easy_relogin') === 'on';
+
       const payload = {
-        address: fd.get('address'),
+        address: userAddress,
         symbol: fd.get('symbol'),
         amount: fd.get('amount') ? parseFloat(fd.get('amount')) : null,
         wallet: fd.get('wallet') === 'true',
@@ -173,10 +184,33 @@
         const link = createLink({
           clientId: 'meshc-django',
           onIntegrationConnected: (p) => setStatus(`Connected to ${p.brokerName}`, 'success'),
-          onTransferFinished: (p) => {
+          onTransferFinished: async (p) => {
             setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
             resultJson.textContent = JSON.stringify(p, null, 2);
             resultsEl.style.display = 'block';
+
+            // Save token for Easy Relogin if enabled and transfer succeeded
+            if (easyRelogin && p.status === 'success') {
+              try {
+                // Extract token from accessToken response
+                const accessToken = p.accessToken;
+                if (accessToken?.accountTokens?.[0]) {
+                  const tokenData = accessToken.accountTokens[0];
+                  await fetch('/meshc/api/save-token/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      token_id: tokenData.accessToken,
+                      integration_type: accessToken.brokerName || p.brokerName || 'Unknown',
+                      user_id: userAddress,
+                    }),
+                  });
+                  console.log('Easy Relogin: token saved for', userAddress);
+                }
+              } catch (saveErr) {
+                console.warn('Easy Relogin: failed to save token', saveErr);
+              }
+            }
           },
           onExit: (err) => {
             submitBtn.disabled = false;
