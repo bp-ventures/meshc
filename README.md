@@ -427,3 +427,11 @@ docker run -p 8000:8000 \
 |---------|---------|-------|
 | Stellar testnet | `GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX` | CEX sandbox mode |
 | Sepolia testnet | `0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c` | Wallet sandbox mode |
+
+---
+
+## Resources
+
+- **Token Icons**: [web3icons](https://github.com/0xa3k5/web3icons/tree/main/raw-svgs/tokens) — SVG icons for crypto tokens
+  - `branded/` — Full-color icons with official brand colors
+  - `mono/` — Single-color (white) icons for dark backgrounds
