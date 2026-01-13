@@ -33,8 +33,8 @@ The `meshsbox` Django app receives Mesh Connect webhook events. One record per `
 **Setting**: `WEBHOOK_ALLOWED_IPS`
 
 ```python
-# Default: localhost (dev) + Mesh production IP
-WEBHOOK_ALLOWED_IPS = ['127.0.0.1', '20.22.113.37']
+# Default: localhost, dev server, Mesh production IP
+WEBHOOK_ALLOWED_IPS = ['127.0.0.1', '5.75.239.79', '20.22.113.37']
 ```
 
 **Override via environment**:
