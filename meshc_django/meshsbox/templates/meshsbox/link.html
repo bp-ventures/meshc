@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mesh Connect Sandbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: #f9f9f9; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
+    label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+    input, select { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { background: #2563eb; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .status { padding: 1rem; border-radius: 4px; margin-top: 1rem; display: none; }
+    .status.success { background: #d1fae5; color: #065f46; }
+    .status.error { background: #fee2e2; color: #991b1b; }
+    .status.loading { background: #e0e7ff; color: #3730a3; }
+    pre { background: #1f2937; color: #e5e7eb; padding: 1rem; border-radius: 4px; overflow-x: auto; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <h1>Mesh Connect Sandbox</h1>
+
+  <div class="card">
+    <form id="token-form">
+      <label>Wallet Address</label>
+      <input type="text" name="address" value="GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX" required>
+
+      <label>Symbol</label>
+      <input type="text" name="symbol" value="USDC">
+
+      <label>Amount (optional)</label>
+      <input type="number" name="amount" step="0.01" placeholder="100.00">
+
+      <label>Mode</label>
+      <select name="wallet">
+        <option value="false">CEX (Stellar testnet)</option>
+        <option value="true">Wallet (Sepolia testnet)</option>
+      </select>
+
+      <button type="submit" id="submit-btn">Connect</button>
+    </form>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card" id="results" style="display: none;">
+    <h3>Result</h3>
+    <pre id="result-json"></pre>
+  </div>
+
+  <script type="module">
+    const form = document.getElementById('token-form');
+    const statusEl = document.getElementById('status');
+    const submitBtn = document.getElementById('submit-btn');
+    const resultsEl = document.getElementById('results');
+    const resultJson = document.getElementById('result-json');
+
+    function setStatus(msg, type) {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${type}`;
+      statusEl.style.display = 'block';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      setStatus('Requesting token...', 'loading');
+
+      const fd = new FormData(form);
+      const payload = {
+        address: fd.get('address'),
+        symbol: fd.get('symbol'),
+        amount: fd.get('amount') ? parseFloat(fd.get('amount')) : null,
+        wallet: fd.get('wallet') === 'true',
+      };
+
+      try {
+        const resp = await fetch('/meshc/api/link-token/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) throw new Error((await resp.json()).error || 'API error');
+
+        const { link_token } = await resp.json();
+        setStatus('Opening Mesh Link...', 'loading');
+
+        const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
+
+        const link = createLink({
+          clientId: 'meshc-django',
+          onIntegrationConnected: (p) => setStatus(`Connected to ${p.brokerName}`, 'success'),
+          onTransferFinished: (p) => {
+            setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
+            resultJson.textContent = JSON.stringify(p, null, 2);
+            resultsEl.style.display = 'block';
+          },
+          onExit: (err) => {
+            submitBtn.disabled = false;
+            if (err) setStatus(`Error: ${err}`, 'error');
+          },
+        });
+
+        link.openLink(link_token);
+      } catch (err) {
+        setStatus(err.message, 'error');
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
