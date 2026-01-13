@@ -106,12 +106,26 @@
       </svg>`
     };
 
-    // Symbol icon switcher
+    // Default addresses per network
+    const defaultAddresses = {
+      XLM: 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+      USDC: 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+      SEPOLIAETH: '0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c',
+    };
+
+    // Symbol icon switcher + address updater
     const symbolSelect = document.getElementById('symbol-dropdown');
     const symbolIcon = document.getElementById('symbol-icon');
+    const addressInput = document.querySelector('input[name="address"]');
 
     function updateSymbolIcon() {
       symbolIcon.innerHTML = tokenIcons[symbolSelect.value] || '';
+      // Update address if it matches a default (user hasn't customized it)
+      const currentAddr = addressInput.value;
+      const isDefault = Object.values(defaultAddresses).includes(currentAddr);
+      if (isDefault || !currentAddr) {
+        addressInput.value = defaultAddresses[symbolSelect.value] || '';
+      }
     }
 
     symbolSelect.addEventListener('change', updateSymbolIcon);
