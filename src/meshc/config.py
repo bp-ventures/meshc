@@ -200,3 +200,38 @@ def mask_secret(secret: str | None) -> str:
     if len(secret) <= 8:
         return "***"
     return f"{secret[:4]}...{secret[-4:]}"
+
+
+def setup_api_logger(log_dir: Path | None = None) -> logging.Logger:
+    """Configure dedicated logger for Mesh API audit trail.
+
+    Logs to ~/.meshc/mesh_api.log with daily rotation.
+    Every API call is logged with timestamp, URL, request/response JSON.
+    """
+    from logging.handlers import TimedRotatingFileHandler
+
+    api_logger = logging.getLogger("meshc.api")
+
+    if api_logger.handlers:  # Already configured
+        return api_logger
+
+    log_dir = log_dir or Path.home() / ".meshc"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "mesh_api.log"
+
+    handler = TimedRotatingFileHandler(
+        log_file,
+        when="midnight",
+        backupCount=30,  # Keep 30 days
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter(
+        "%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)d %(funcName)s() :: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    ))
+
+    api_logger.addHandler(handler)
+    api_logger.setLevel(logging.INFO)
+    api_logger.propagate = False  # Don't duplicate to root logger
+
+    return api_logger
