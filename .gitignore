@@ -23,3 +23,13 @@ venv/
 .coverage
 htmlcov/
 .mypy_cache/
+
+# Logs
+*.log
+*.log.*
+meshc_django/logs/*
+!meshc_django/logs/.gitkeep
+
+# Django
+meshc_django/db.sqlite3
+meshc_django/staticfiles/
