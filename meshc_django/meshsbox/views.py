@@ -22,10 +22,7 @@ logger = logging.getLogger("meshsbox")
 
 
 def get_client_ip(request) -> str:
-    """Extract client IP, handling X-Forwarded-For from proxies."""
-    xff = request.META.get("HTTP_X_FORWARDED_FOR")
-    if xff:
-        return xff.split(",")[0].strip()
+    """Extract client IP from REMOTE_ADDR (don't trust spoofable XFF header)."""
     return request.META.get("REMOTE_ADDR", "")
 
 
@@ -34,7 +31,6 @@ def index(request):
     return render(request, 'meshsbox/link.html')
 
 
-@csrf_exempt
 @require_POST
 def api_link_token(request):
     """Generate Mesh link token.
@@ -92,7 +88,6 @@ def api_link_token(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @require_POST
 def api_save_token(request):
     """Save integration token for Easy Relogin.

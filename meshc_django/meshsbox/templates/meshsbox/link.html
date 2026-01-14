@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Mesh Connect Sandbox</title>
   <link rel="icon" type="image/x-icon" href="{% static 'meshsbox/favicon.ico' %}">
   <link rel="icon" type="image/png" sizes="512x512" href="{% static 'meshsbox/favicon-512.png' %}">
@@ -348,6 +349,7 @@
     const submitBtn = document.getElementById('submit-btn');
     const resultsEl = document.getElementById('results');
     const resultJson = document.getElementById('result-json');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
     function setStatus(msg, type) {
       statusEl.textContent = msg;
@@ -375,7 +377,10 @@
       try {
         const resp = await fetch('/meshc/api/link-token/', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+          },
           body: JSON.stringify(payload),
         });
 
@@ -420,7 +425,10 @@
                 if (tokenId) {
                   const saveResp = await fetch('/meshc/api/save-token/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-CSRFToken': csrfToken,
+                    },
                     body: JSON.stringify({
                       token_id: tokenId,
                       integration_type: brokerName,
