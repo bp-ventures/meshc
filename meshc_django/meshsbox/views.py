@@ -8,6 +8,7 @@ Endpoints:
 """
 import json
 import logging
+import re
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -19,6 +20,28 @@ from django.views.decorators.http import require_POST
 from meshc import create_sandbox_cex_token, create_sandbox_wallet_token, load_config
 
 logger = logging.getLogger("meshsbox")
+
+# Address validation patterns
+STELLAR_ADDRESS_RE = re.compile(r'^G[A-Z2-7]{55}$')
+ETHEREUM_ADDRESS_RE = re.compile(r'^0x[a-fA-F0-9]{40}$')
+
+# Symbols that use Ethereum addresses
+ETHEREUM_SYMBOLS = {'SEPOLIAETH', 'ETH'}
+
+
+def validate_address(address: str, symbol: str) -> str | None:
+    """Validate wallet address format for the given symbol.
+
+    Returns None if valid, error message if invalid.
+    """
+    if symbol in ETHEREUM_SYMBOLS:
+        if not ETHEREUM_ADDRESS_RE.match(address):
+            return f"Invalid Ethereum address format. Expected 0x followed by 40 hex characters."
+    else:
+        # Stellar address (XLM, USDC, etc.)
+        if not STELLAR_ADDRESS_RE.match(address):
+            return f"Invalid Stellar address format. Expected G followed by 55 base32 characters."
+    return None
 
 
 def get_client_ip(request) -> str:
@@ -52,9 +75,15 @@ def api_link_token(request):
     if not address:
         return JsonResponse({'error': 'address is required'}, status=400)
 
+    symbol = data.get('symbol', 'USDC')
+
+    # Validate address format
+    addr_error = validate_address(address, symbol)
+    if addr_error:
+        return JsonResponse({'error': addr_error}, status=400)
+
     config = load_config()
     user_id = data.get('user_id', 'web-user')
-    symbol = data.get('symbol', 'USDC')
     amount = data.get('amount')
     wallet_mode = data.get('wallet', False)
 

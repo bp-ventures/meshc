@@ -40,6 +40,26 @@ class ApiLinkTokenTests(SimpleTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('address', response.json()['error'])
 
+    def test_rejects_invalid_stellar_address(self):
+        """API rejects invalid Stellar address format."""
+        response = self.client.post('/meshc/api/link-token/',
+            data=json.dumps({'address': 'invalid', 'symbol': 'USDC'}), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Stellar', response.json()['error'])
+
+    def test_rejects_invalid_ethereum_address(self):
+        """API rejects invalid Ethereum address format."""
+        response = self.client.post('/meshc/api/link-token/',
+            data=json.dumps({'address': 'notanaddress', 'symbol': 'SEPOLIAETH'}), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Ethereum', response.json()['error'])
+
+    def test_rejects_sql_injection_attempt(self):
+        """API rejects malicious input in address field."""
+        response = self.client.post('/meshc/api/link-token/',
+            data=json.dumps({'address': "'; DROP TABLE users;--", 'symbol': 'USDC'}), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
     @patch('meshsbox.views.create_sandbox_cex_token')
     @patch('meshsbox.views.load_config')
     def test_cex_success(self, mock_config, mock_create):
@@ -47,8 +67,10 @@ class ApiLinkTokenTests(SimpleTestCase):
         mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'x'}
         mock_create.return_value = MagicMock(token='tok', expires_at='2025-01-01')
 
+        # Valid Stellar address (56 chars: G + 55 base32)
+        valid_stellar = 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX'
         response = self.client.post('/meshc/api/link-token/',
-            data=json.dumps({'address': 'GTEST'}), content_type='application/json')
+            data=json.dumps({'address': valid_stellar}), content_type='application/json')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['link_token'], 'tok')
@@ -60,8 +82,10 @@ class ApiLinkTokenTests(SimpleTestCase):
         mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'x'}
         mock_create.return_value = MagicMock(token='wtok', expires_at='2025-01-01')
 
+        # Valid Ethereum address (42 chars: 0x + 40 hex)
+        valid_eth = '0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c'
         response = self.client.post('/meshc/api/link-token/',
-            data=json.dumps({'address': '0xABC', 'wallet': True}), content_type='application/json')
+            data=json.dumps({'address': valid_eth, 'symbol': 'SEPOLIAETH', 'wallet': True}), content_type='application/json')
 
         self.assertEqual(response.status_code, 200)
         mock_create.assert_called_once()
