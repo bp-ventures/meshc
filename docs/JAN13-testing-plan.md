@@ -9,8 +9,8 @@ From project root:
 source .venv/bin/activate
 
 # Store a test token
-meshc token-store test-token-123 Coinbase --user-id testuser1 --lang en
 
+meshc token-store --token-id test-token-123 --integration-type Coinbase --user-id testuser1 --lang en
 # List tokens (should show the new token)
 meshc token-list
 
