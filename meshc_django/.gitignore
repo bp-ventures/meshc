@@ -1,0 +1,8 @@
+# Django database (auth/sessions only)
+db.sqlite3
+
+# Log files (keep directory, ignore contents)
+logs/*.log
+
+# Collected static files
+staticfiles/

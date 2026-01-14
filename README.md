@@ -37,6 +37,49 @@ meshc link-token --user-id user123 --address GADDR... --symbol USDC
 meshc mock-deposit --user-id user123 --address GADDR... --symbol USDC --amount 100
 ```
 
+## Django Frontend (Self-Service)
+
+A web-based sandbox for generating and testing Mesh link tokens without CLI.
+
+### Quick Start
+
+```bash
+# Install with Django support
+uv pip install -e ".[django]"
+
+# Start the server
+cd meshc_django && python manage.py runserver
+
+# Open browser
+open http://localhost:8000/meshc/
+```
+
+### Features
+
+- **Self-service form**: Enter wallet address, symbol, amount
+- **Mode toggle**: CEX (Stellar testnet) or Wallet (Sepolia testnet)
+- **Live SDK**: Opens Mesh Link popup directly in browser
+- **No database**: Stateless—token storage remains in CLI via SQLite
+
+### API Endpoint
+
+Generate tokens programmatically:
+
+```bash
+curl -X POST http://localhost:8000/meshc/api/link-token/ \
+  -H "Content-Type: application/json" \
+  -d '{"address": "GBXY...", "symbol": "USDC", "amount": 100}'
+```
+
+Response:
+```json
+{"link_token": "...", "expires_at": "2025-01-01T00:00:00Z"}
+```
+
+See `docs/django-migration-1.md` for full specification.
+
+---
+
 ## Library Usage
 
 ```python
@@ -304,3 +347,91 @@ Tokens are stored in SQLite with the following fields:
 - Use `revoke_token()` for soft delete (preserves audit trail)
 - Consider encrypting `token_id` field in production
 - Tokens should be treated as sensitive credentials
+
+---
+
+## Deployment
+
+### Development
+
+```bash
+# Clone and install
+git clone https://github.com/antb123/meshc.git
+cd meshc
+uv venv && source .venv/bin/activate
+uv pip install -e ".[dev,django]"
+
+# Configure credentials
+cat > local_settings.py << EOF
+MESH_CLIENT_ID = "your-client-id"
+MESH_SECRET = "your-secret"
+EOF
+
+# Run tests
+pytest                                          # Library tests
+cd meshc_django && python manage.py test meshsbox  # Django tests
+```
+
+### Production (Django Frontend)
+
+The Django app is designed for sandbox/development use. For production:
+
+1. **Set environment variables**:
+   ```bash
+   export DJANGO_SECRET_KEY="your-secure-random-key"
+   export DJANGO_DEBUG="false"
+   export MESH_CLIENT_ID="..."
+   export MESH_SECRET="..."
+   ```
+
+2. **Update ALLOWED_HOSTS** in `meshc_django/meshc_django/settings.py`:
+   ```python
+   ALLOWED_HOSTS = ['your-domain.com']
+   ```
+
+3. **Add authentication** before exposing publicly (currently no auth)
+
+4. **Run with gunicorn**:
+   ```bash
+   cd meshc_django
+   pip install gunicorn
+   gunicorn meshc_django.wsgi:application --bind 0.0.0.0:8000
+   ```
+
+### Docker (Optional)
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+RUN pip install -e ".[django]" gunicorn
+ENV DJANGO_DEBUG=false
+EXPOSE 8000
+CMD ["gunicorn", "meshc_django.wsgi:application", "--bind", "0.0.0.0:8000", "--chdir", "meshc_django"]
+```
+
+```bash
+docker build -t meshc .
+docker run -p 8000:8000 \
+  -e MESH_CLIENT_ID="..." \
+  -e MESH_SECRET="..." \
+  -e DJANGO_SECRET_KEY="..." \
+  meshc
+```
+
+---
+
+## Test Accounts
+
+| Network | Address | Usage |
+|---------|---------|-------|
+| Stellar testnet | `GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX` | CEX sandbox mode |
+| Sepolia testnet | `0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c` | Wallet sandbox mode |
+
+---
+
+## Resources
+
+- **Token Icons**: [web3icons](https://github.com/0xa3k5/web3icons/tree/main/raw-svgs/tokens) — SVG icons for crypto tokens
+  - `branded/` — Full-color icons with official brand colors
+  - `mono/` — Single-color (white) icons for dark backgrounds

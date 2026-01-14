@@ -1,114 +1,107 @@
-"""Token storage backend using Peewee ORM.
+"""Token storage backend using Django ORM.
 
-Lightweight SQLite storage for Mesh Managed Tokens (MMT).
-Thread-safe, Unix-simple, Django-like API.
+Lightweight storage for Mesh Managed Tokens (MMT).
+Thread-safe, Django-powered, shared with web admin.
 """
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from peewee import (
-    CharField,
-    DateTimeField,
-    DoesNotExist,
-    Model,
-    SqliteDatabase,
-)
-from playhouse.sqlite_ext import JSONField
-
 logger = logging.getLogger("meshc")
 
-# Database instance with WAL mode for concurrency
-# Initialized lazily via init_db()
-db = SqliteDatabase(None, pragmas={'journal_mode': 'wal'})
+# Django app path - relative to this file
+_DJANGO_PROJECT_PATH = Path(__file__).parent.parent.parent / 'meshc_django'
+_DJANGO_DB_PATH = _DJANGO_PROJECT_PATH / 'db.sqlite3'
+
+_django_configured = False
 
 
-class IntegrationToken(Model):
-    """ORM model for integration tokens.
+def _django_setup() -> None:
+    """Bootstrap Django for CLI use (standalone mode)."""
+    global _django_configured
+    if _django_configured:
+        return
 
-    Stores Mesh tokenIds with metadata for reuse across sessions.
-    Supports both CEX integrations (user_id) and wallet integrations (wallet_address).
-    """
+    import django
+    from django.conf import settings
 
-    token_id = CharField(index=True)
-    integration_type = CharField(index=True)  # "Coinbase", "Binance", "MetaMask", etc.
-    user_id = CharField(null=True, index=True)  # App user identifier
-    wallet_address = CharField(null=True, index=True)  # Wallet public key
-    scope = CharField(default='read')  # "read" or "write"
-    status = CharField(default='active', index=True)  # "active", "revoked", "expired"
-    lang = CharField(null=True, default='en', index=True)  # User language: "en", "fr", "es", etc.
-    created_at = DateTimeField(default=datetime.utcnow)
-    updated_at = DateTimeField(default=datetime.utcnow)
-    expires_at = DateTimeField(null=True)
-    metadata = JSONField(default=dict)  # Additional data as JSON
+    if settings.configured:
+        _django_configured = True
+        return
 
-    class Meta:
-        database = db
-        table_name = 'integration_tokens'
-        indexes = (
-            # Composite unique index on token_id + integration_type
-            (('token_id', 'integration_type'), True),
-        )
+    # Add meshc_django to path so meshsbox is importable
+    if str(_DJANGO_PROJECT_PATH) not in sys.path:
+        sys.path.insert(0, str(_DJANGO_PROJECT_PATH))
 
-    @property
-    def is_active(self) -> bool:
-        """Check if token is currently active."""
-        return self.status == 'active'
+    settings.configure(
+        DATABASES={
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': str(_DJANGO_DB_PATH),
+            }
+        },
+        INSTALLED_APPS=[
+            'django.contrib.contenttypes',
+            'meshsbox',
+        ],
+        DEFAULT_AUTO_FIELD='django.db.models.BigAutoField',
+        USE_TZ=True,
+    )
+    django.setup()
+    _django_configured = True
+    logger.debug("django storage initialized at %s", _DJANGO_DB_PATH)
 
-    @property
-    def is_expired(self) -> bool:
-        """Check if token has expired (best-effort, may not be accurate)."""
-        if not self.expires_at:
-            return False
-        return datetime.now() > self.expires_at
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dict for JSON serialization."""
-        return {
-            'id': self.id,
-            'token_id': self.token_id,
-            'integration_type': self.integration_type,
-            'user_id': self.user_id,
-            'wallet_address': self.wallet_address,
-            'scope': self.scope,
-            'status': self.status,
-            'lang': self.lang,
-            'created_at': self.created_at.isoformat() + 'Z',
-            'updated_at': self.updated_at.isoformat() + 'Z',
-            'expires_at': self.expires_at.isoformat() + 'Z' if self.expires_at else None,
-            'metadata': self.metadata,
-        }
+def _get_model():
+    """Lazy import of IntegrationToken model."""
+    _django_setup()
+    from meshsbox.models import IntegrationToken
+    return IntegrationToken
 
-    def save(self, *args, **kwargs):
-        """Override save to update updated_at timestamp."""
-        self.updated_at = datetime.utcnow()
-        return super().save(*args, **kwargs)
+
+# Lazy reference to IntegrationToken model for external imports
+# Usage: from meshc.storage import IntegrationToken; model = IntegrationToken()
+class _LazyModel:
+    """Lazy proxy to Django IntegrationToken model."""
+    _model = None
+
+    def __getattr__(self, name):
+        if _LazyModel._model is None:
+            _LazyModel._model = _get_model()
+        return getattr(_LazyModel._model, name)
+
+    def __call__(self, *args, **kwargs):
+        if _LazyModel._model is None:
+            _LazyModel._model = _get_model()
+        return _LazyModel._model(*args, **kwargs)
+
+
+IntegrationToken = _LazyModel()
 
 
 # -----------------------------------------------------------------------------
-# Module Functions (Public API)
+# Public API (same signatures as original Peewee version)
 # -----------------------------------------------------------------------------
 
 
-def init_db(db_path: str | Path) -> None:
+def init_db(db_path: str | Path | None = None) -> None:
     """Initialize database connection and create tables.
 
     Args:
-        db_path: Path to SQLite database file
+        db_path: Ignored (uses Django's configured database)
 
-    Creates parent directory if it doesn't exist.
     Safe to call multiple times (idempotent).
     """
-    db_path = Path(db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _django_setup()
 
-    db.init(str(db_path))
-    db.connect()
-    db.create_tables([IntegrationToken], safe=True)
-    logger.debug("token storage initialized at %s", db_path)
+    # Ensure tables exist via migrate --run-syncdb
+    from django.core.management import call_command
+    call_command('migrate', '--run-syncdb', verbosity=0)
+    logger.debug("database tables synced")
 
 
 def store_token(
@@ -121,7 +114,7 @@ def store_token(
     lang: str = 'en',
     expires_at: datetime | str | None = None,
     metadata: dict[str, Any] | None = None,
-) -> IntegrationToken:
+):
     """Store or update an integration token.
 
     Uses upsert pattern: inserts if new, updates if exists.
@@ -139,45 +132,42 @@ def store_token(
     Returns:
         Stored IntegrationToken instance
     """
-    # Convert string timestamp to datetime if needed
+    IntegrationToken = _get_model()
+
+    # Parse expires_at if string
     if isinstance(expires_at, str):
         try:
-            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-        except ValueError:
+            from django.utils.dateparse import parse_datetime
+            expires_at = parse_datetime(expires_at.replace('Z', '+00:00'))
+        except (ValueError, TypeError):
             logger.warning("invalid expires_at format, ignoring: %s", expires_at)
             expires_at = None
 
-    defaults = {
-        'user_id': user_id,
-        'wallet_address': wallet_address,
-        'scope': scope,
-        'lang': lang,
-        'expires_at': expires_at,
-        'metadata': metadata or {},
-    }
-
-    token, created = IntegrationToken.get_or_create(
+    token, created = IntegrationToken.objects.update_or_create(
         token_id=token_id,
         integration_type=integration_type,
-        defaults=defaults
+        defaults={
+            'user_id': user_id,
+            'wallet_address': wallet_address,
+            'scope': scope or 'read',
+            'lang': lang or 'en',  # Ensure non-null
+            'expires_at': expires_at,
+            'metadata': metadata or {},
+        }
     )
 
-    if not created:
-        # Update existing token
-        for key, value in defaults.items():
-            setattr(token, key, value)
-        token.save()
-        logger.debug("updated token %s (%s)", token_id[:12], integration_type)
-    else:
+    if created:
         logger.info("stored new token %s (%s)", token_id[:12], integration_type)
+    else:
+        logger.debug("updated token %s (%s)", token_id[:12], integration_type)
 
     return token
 
 
 def get_token(
     token_id: str,
-    integration_type: str | None = None
-) -> IntegrationToken | None:
+    integration_type: str | None = None,
+):
     """Get a token by ID.
 
     Args:
@@ -187,15 +177,13 @@ def get_token(
     Returns:
         IntegrationToken if found, None otherwise
     """
-    try:
-        query = IntegrationToken.select().where(
-            IntegrationToken.token_id == token_id
-        )
-        if integration_type:
-            query = query.where(IntegrationToken.integration_type == integration_type)
-        return query.get()
-    except DoesNotExist:
-        return None
+    IntegrationToken = _get_model()
+
+    qs = IntegrationToken.objects.filter(token_id=token_id)
+    if integration_type:
+        qs = qs.filter(integration_type=integration_type)
+
+    return qs.first()
 
 
 def list_tokens(
@@ -203,7 +191,7 @@ def list_tokens(
     wallet_address: str | None = None,
     integration_type: str | None = None,
     active_only: bool = False,
-) -> list[IntegrationToken]:
+) -> list:
     """List tokens with optional filters.
 
     Args:
@@ -215,23 +203,25 @@ def list_tokens(
     Returns:
         List of IntegrationToken instances, ordered by created_at desc
     """
-    query = IntegrationToken.select()
+    IntegrationToken = _get_model()
+
+    qs = IntegrationToken.objects.all()
 
     if user_id:
-        query = query.where(IntegrationToken.user_id == user_id)
+        qs = qs.filter(user_id=user_id)
     if wallet_address:
-        query = query.where(IntegrationToken.wallet_address == wallet_address)
+        qs = qs.filter(wallet_address=wallet_address)
     if integration_type:
-        query = query.where(IntegrationToken.integration_type == integration_type)
+        qs = qs.filter(integration_type=integration_type)
     if active_only:
-        query = query.where(IntegrationToken.status == 'active')
+        qs = qs.filter(status='active')
 
-    return list(query.order_by(IntegrationToken.created_at.desc()))
+    return list(qs.order_by('-created_at'))
 
 
 def revoke_token(
     token_id: str,
-    integration_type: str | None = None
+    integration_type: str | None = None,
 ) -> bool:
     """Mark a token as revoked.
 
@@ -244,17 +234,15 @@ def revoke_token(
     Returns:
         True if token was found and revoked, False otherwise
     """
-    query = IntegrationToken.update(
-        status='revoked',
-        updated_at=datetime.utcnow()
-    ).where(IntegrationToken.token_id == token_id)
+    IntegrationToken = _get_model()
 
+    qs = IntegrationToken.objects.filter(token_id=token_id)
     if integration_type:
-        query = query.where(IntegrationToken.integration_type == integration_type)
+        qs = qs.filter(integration_type=integration_type)
 
-    rows_updated = query.execute()
+    count = qs.update(status='revoked')
 
-    if rows_updated > 0:
+    if count > 0:
         logger.info("revoked token %s", token_id[:12])
         return True
     return False
@@ -262,7 +250,7 @@ def revoke_token(
 
 def delete_token(
     token_id: str,
-    integration_type: str | None = None
+    integration_type: str | None = None,
 ) -> bool:
     """Permanently delete a token.
 
@@ -276,16 +264,15 @@ def delete_token(
     Returns:
         True if token was found and deleted, False otherwise
     """
-    query = IntegrationToken.delete().where(
-        IntegrationToken.token_id == token_id
-    )
+    IntegrationToken = _get_model()
 
+    qs = IntegrationToken.objects.filter(token_id=token_id)
     if integration_type:
-        query = query.where(IntegrationToken.integration_type == integration_type)
+        qs = qs.filter(integration_type=integration_type)
 
-    rows_deleted = query.execute()
+    count, _ = qs.delete()
 
-    if rows_deleted > 0:
+    if count > 0:
         logger.info("deleted token %s", token_id[:12])
         return True
     return False

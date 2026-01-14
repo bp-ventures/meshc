@@ -11,6 +11,7 @@ from .core import (
     TransferStatus,
     create_link_token,
     create_sandbox_cex_token,
+    create_sandbox_wallet_token,
     get_account_tokens_for_user,
     get_networks,
     get_transfer_status,
@@ -45,6 +46,7 @@ __all__ = [
     # Core functions
     "create_link_token",
     "create_sandbox_cex_token",
+    "create_sandbox_wallet_token",
     "get_transfer_status",
     "get_networks",
     "print_sandbox_instructions",

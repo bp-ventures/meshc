@@ -4,6 +4,7 @@ Pure functions for API interaction. No printing, no CLI concerns.
 """
 from __future__ import annotations
 
+import json as json_module
 import logging
 import random
 import time
@@ -17,6 +18,19 @@ from .config import SANDBOX_API_URL, SEPOLIA_NETWORK_ID, mask_secret
 from .errors import ERROR_DESCRIPTIONS, get_error_description, is_retryable_error
 
 logger = logging.getLogger("meshc")
+
+
+# -----------------------------------------------------------------------------
+# API Audit Logging Helpers
+# -----------------------------------------------------------------------------
+
+
+def _json_compact(obj: dict) -> str:
+    """Compact JSON for logging, truncate if too long."""
+    s = json_module.dumps(obj, separators=(",", ":"))
+    if len(s) > 2000:
+        return s[:2000] + "...(truncated)"
+    return s
 
 
 # -----------------------------------------------------------------------------
@@ -179,7 +193,11 @@ def _request(
     params: dict[str, str] | None = None,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Make authenticated request to Mesh API."""
+    """Make authenticated request to Mesh API with audit logging."""
+    from .config import setup_api_logger
+
+    api_log = setup_api_logger()
+
     headers = {
         "X-Client-Id": client_id,
         "X-Client-Secret": client_secret,
@@ -187,23 +205,33 @@ def _request(
         "Content-Type": "application/json",
     }
 
-    logger.debug(
-        "%s %s (client=%s...)",
-        method,
-        url,
-        client_id[:8] if client_id else "none",
-    )
+    # Existing debug log
+    logger.debug("%s %s (client=%s...)", method, url, client_id[:8] if client_id else "none")
+
+    # Audit log: request (stacklevel=2 shows the function that called _request)
+    api_log.info("%s %s", method, url, stacklevel=2)
+    if json:
+        api_log.info("  Request: %s", _json_compact(json), stacklevel=2)
+
+    start = time.perf_counter()
 
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = client.request(method, url, headers=headers, json=json, params=params)
     except httpx.RequestError as e:
+        elapsed = time.perf_counter() - start
+        api_log.info("  Error (%.3fs): %s", elapsed, e, stacklevel=2)
         raise MeshAPIError(f"request failed: {e}") from e
+
+    elapsed = time.perf_counter() - start
 
     try:
         data = resp.json()
     except ValueError:
         data = {}
+
+    # Audit log: response
+    api_log.info("  Response (%d, %.3fs): %s", resp.status_code, elapsed, _json_compact(data), stacklevel=2)
 
     if resp.status_code >= 400:
         msg = data.get("message") or data.get("error") or resp.text

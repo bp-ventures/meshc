@@ -1,0 +1,238 @@
+"""Views for Mesh Connect sandbox frontend.
+
+Endpoints:
+- GET /meshc/ - Self-service form
+- POST /meshc/api/link-token/ - Generate link token
+- POST /meshc/api/save-token/ - Save integration token for Easy Relogin
+- POST /meshc/api/webhook/ - Receive Mesh webhook events
+"""
+import json
+import logging
+import re
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+
+from meshc import create_sandbox_cex_token, create_sandbox_wallet_token, load_config
+
+logger = logging.getLogger("meshsbox")
+
+# Address validation patterns
+STELLAR_ADDRESS_RE = re.compile(r'^G[A-Z2-7]{55}$')
+ETHEREUM_ADDRESS_RE = re.compile(r'^0x[a-fA-F0-9]{40}$')
+
+# Symbols that use Ethereum addresses
+ETHEREUM_SYMBOLS = {'SEPOLIAETH', 'ETH'}
+
+
+def validate_address(address: str, symbol: str) -> str | None:
+    """Validate wallet address format for the given symbol.
+
+    Returns None if valid, error message if invalid.
+    """
+    if symbol in ETHEREUM_SYMBOLS:
+        if not ETHEREUM_ADDRESS_RE.match(address):
+            return f"Invalid Ethereum address format. Expected 0x followed by 40 hex characters."
+    else:
+        # Stellar address (XLM, USDC, etc.)
+        if not STELLAR_ADDRESS_RE.match(address):
+            return f"Invalid Stellar address format. Expected G followed by 55 base32 characters."
+    return None
+
+
+def get_client_ip(request) -> str:
+    """Extract client IP from REMOTE_ADDR (don't trust spoofable XFF header)."""
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def index(request):
+    """Render the self-service form."""
+    return render(request, 'meshsbox/link.html')
+
+
+@require_POST
+def api_link_token(request):
+    """Generate Mesh link token.
+
+    POST /meshc/api/link-token/
+    {
+        "address": "GBXY...",      # Required
+        "symbol": "USDC",          # Default: USDC
+        "amount": 100.0,           # Optional
+        "wallet": false            # true for Sepolia wallet mode
+    }
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    address = data.get('address')
+    if not address:
+        return JsonResponse({'error': 'address is required'}, status=400)
+
+    symbol = data.get('symbol', 'USDC')
+
+    # Validate address format
+    addr_error = validate_address(address, symbol)
+    if addr_error:
+        return JsonResponse({'error': addr_error}, status=400)
+
+    config = load_config()
+    user_id = data.get('user_id', 'web-user')
+    amount = data.get('amount')
+    wallet_mode = data.get('wallet', False)
+
+    try:
+        if wallet_mode:
+            result = create_sandbox_wallet_token(
+                client_id=config['client_id'],
+                client_secret=config['client_secret'],
+                user_id=user_id,
+                to_address=address,
+                symbol=symbol,
+                amount=amount,
+                api_url=config['api_url'],
+            )
+        else:
+            result = create_sandbox_cex_token(
+                client_id=config['client_id'],
+                client_secret=config['client_secret'],
+                user_id=user_id,
+                to_address=address,
+                symbol=symbol,
+                amount=amount,
+                api_url=config['api_url'],
+            )
+
+        return JsonResponse({
+            'link_token': result.token,
+            'expires_at': result.expires_at,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_POST
+def api_save_token(request):
+    """Save integration token for Easy Relogin.
+
+    POST /meshc/api/save-token/
+    {
+        "token_id": "tok_...",           # Required: Mesh access token
+        "integration_type": "Coinbase",  # Required: broker name
+        "user_id": "GBXY..."             # Required: stellar/wallet address
+    }
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    token_id = data.get('token_id')
+    integration_type = data.get('integration_type')
+    user_id = data.get('user_id')
+
+    if not token_id or not integration_type or not user_id:
+        return JsonResponse({'error': 'token_id, integration_type, and user_id are required'}, status=400)
+
+    from .models import IntegrationToken
+
+    token, created = IntegrationToken.objects.update_or_create(
+        token_id=token_id,
+        integration_type=integration_type,
+        defaults={
+            'user_id': user_id,
+            'status': 'active',
+            'scope': 'read',
+            'lang': 'en',
+        }
+    )
+
+    action = 'created' if created else 'updated'
+    logger.info("save-token: %s token=%s type=%s user=%s", action, token_id[:12], integration_type, user_id[:12])
+
+    return JsonResponse({'status': 'saved', 'action': action})
+
+
+@csrf_exempt
+@require_POST
+def api_webhook(request):
+    """Receive Mesh webhook events.
+
+    POST /meshc/api/webhook/
+
+    Stores one record per transaction_id. Multiple webhooks for same
+    transaction append to history array. IP-filtered.
+
+    Required fields: TransactionId, TransferStatus
+    """
+    # Check IP allowlist
+    client_ip = get_client_ip(request)
+    allowed_ips = getattr(settings, 'WEBHOOK_ALLOWED_IPS', ['127.0.0.1'])
+    if client_ip not in allowed_ips:
+        logger.warning("webhook: blocked ip=%s", client_ip)
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    # Parse JSON body
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        logger.warning("webhook: invalid JSON ip=%s", client_ip)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # Validate required fields
+    transaction_id = payload.get("TransactionId")
+    if not transaction_id:
+        logger.warning("webhook: missing TransactionId")
+        return JsonResponse({"error": "TransactionId required"}, status=400)
+
+    status = payload.get("TransferStatus")
+    if not status:
+        logger.warning("webhook: missing TransferStatus tx=%s", transaction_id[:16])
+        return JsonResponse({"error": "TransferStatus required"}, status=400)
+
+    # Parse amount safely
+    amount = None
+    raw_amount = payload.get("SourceAmount") or payload.get("DestinationAmount")
+    if raw_amount is not None:
+        try:
+            amount = Decimal(str(raw_amount))
+        except (InvalidOperation, TypeError):
+            logger.warning("webhook: invalid amount=%s tx=%s", raw_amount, transaction_id[:16])
+
+    # Import model here to avoid circular imports during migrations
+    from .models import MeshWebhook
+
+    # Upsert: create or update
+    webhook, created = MeshWebhook.objects.get_or_create(
+        transaction_id=transaction_id,
+        defaults={
+            "status": status,
+            "destination_address": payload.get("DestinationAddress", ""),
+            "token": payload.get("Token", ""),
+            "chain": payload.get("Chain", ""),
+            "source_provider": payload.get("SourceAccountProvider", ""),
+            "amount": amount,
+            "tx_hash": payload.get("TxHash", ""),
+            "history": [payload],
+        }
+    )
+
+    if not created:
+        # Update existing: append to history, update status
+        webhook.history.append(payload)
+        webhook.status = status
+        webhook.tx_hash = payload.get("TxHash") or webhook.tx_hash
+        if amount is not None:
+            webhook.amount = amount
+        webhook.save()
+        logger.info("webhook: updated tx=%s status=%s count=%d", transaction_id[:16], status, len(webhook.history))
+    else:
+        logger.info("webhook: created tx=%s status=%s", transaction_id[:16], status)
+
+    return JsonResponse({"status": "ok", "transaction_id": transaction_id})
