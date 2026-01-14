@@ -202,10 +202,37 @@ def mask_secret(secret: str | None) -> str:
     return f"{secret[:4]}...{secret[-4:]}"
 
 
+def _get_log_dir() -> Path:
+    """Get log directory from config or find Django logs dir."""
+    # Check local_settings for explicit config
+    local = _load_local_settings()
+    if local.get("MESH_API_LOG_DIR"):
+        return Path(local["MESH_API_LOG_DIR"])
+
+    # Check env var
+    env_dir = _get_env("MESH_API_LOG_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    # Look for Django logs directory (search up from cwd)
+    for search_dir in [Path.cwd()] + list(Path.cwd().parents)[:3]:
+        django_logs = search_dir / "meshc_django" / "logs"
+        if django_logs.is_dir():
+            return django_logs
+
+    # Fallback to ~/.meshc/
+    return Path.home() / ".meshc"
+
+
 def setup_api_logger(log_dir: Path | None = None) -> logging.Logger:
     """Configure dedicated logger for Mesh API audit trail.
 
-    Logs to ~/.meshc/mesh_api.log with daily rotation.
+    Log location priority:
+    1. log_dir argument
+    2. MESH_API_LOG_DIR from local_settings.py or env
+    3. meshc_django/logs/ if exists
+    4. ~/.meshc/
+
     Old logs are compressed with gzip and kept forever.
     """
     import gzip
@@ -217,7 +244,7 @@ def setup_api_logger(log_dir: Path | None = None) -> logging.Logger:
     if api_logger.handlers:  # Already configured
         return api_logger
 
-    log_dir = log_dir or Path.home() / ".meshc"
+    log_dir = log_dir or _get_log_dir()
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "mesh_api.log"
 
