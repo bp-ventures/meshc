@@ -169,6 +169,7 @@
         symbol: fd.get('symbol'),
         amount: fd.get('amount') ? parseFloat(fd.get('amount')) : null,
         wallet: fd.get('wallet') === 'true',
+        user_id: userAddress,
       };
 
       try {
