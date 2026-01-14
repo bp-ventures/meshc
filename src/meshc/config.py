@@ -206,8 +206,10 @@ def setup_api_logger(log_dir: Path | None = None) -> logging.Logger:
     """Configure dedicated logger for Mesh API audit trail.
 
     Logs to ~/.meshc/mesh_api.log with daily rotation.
-    Every API call is logged with timestamp, URL, request/response JSON.
+    Old logs are compressed with gzip and kept forever.
     """
+    import gzip
+    import shutil
     from logging.handlers import TimedRotatingFileHandler
 
     api_logger = logging.getLogger("meshc.api")
@@ -222,9 +224,23 @@ def setup_api_logger(log_dir: Path | None = None) -> logging.Logger:
     handler = TimedRotatingFileHandler(
         log_file,
         when="midnight",
-        backupCount=30,  # Keep 30 days
+        backupCount=0,  # Keep forever
         encoding="utf-8",
     )
+
+    # Compress rotated logs with gzip
+    def namer(name: str) -> str:
+        return name + ".gz"
+
+    def rotator(source: str, dest: str) -> None:
+        with open(source, "rb") as f_in:
+            with gzip.open(dest, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        Path(source).unlink()
+
+    handler.namer = namer
+    handler.rotator = rotator
+
     handler.setFormatter(logging.Formatter(
         "%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)d %(funcName)s() :: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
