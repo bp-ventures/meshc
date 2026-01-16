@@ -448,16 +448,9 @@ def api_deposit_token(request):
     if not auth_token:
         return JsonResponse({'error': 'auth_token is required'}, status=400)
 
-    # Map exchange names to Mesh API types
-    # Note: Mesh returns 'binanceInternationalDirect' in callbacks
-    exchange_type_map = {
-        'coinbase': 'coinbase',
-        'binanceInternational': 'binanceInternational',
-        'binanceInternationalDirect': 'binanceInternational',
-        'binance': 'binanceInternational',
-        'Binance': 'binanceInternational',
-    }
-    exchange_type = exchange_type_map.get(exchange, exchange)
+    # Pass exchange type directly - don't map it
+    # Mesh API may require exact type from callback (e.g., binanceInternationalDirect)
+    exchange_type = exchange
 
     # Get network ID for the symbol
     network_id = SYMBOL_NETWORK_MAP.get(symbol.upper())
