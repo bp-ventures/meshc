@@ -247,6 +247,30 @@
       max-height: 300px;
     }
 
+    .info-box {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border: 1px solid #93c5fd;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.85rem;
+      color: #1e40af;
+    }
+
+    .info-box strong {
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    .info-box ol {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    .info-box li {
+      margin-bottom: 0.25rem;
+    }
+
     .deposit-address {
       margin-top: 1.5rem;
       padding: 1rem;
@@ -288,6 +312,14 @@
       <h1>Withdraw to Exchange</h1>
     </div>
     <p class="subtitle">Transfer from your wallet to your exchange account</p>
+
+    <div class="info-box" id="auth-info">
+      <strong>Two-step process:</strong>
+      <ol>
+        <li>Connect your exchange account (one-time setup)</li>
+        <li>Connect your wallet and confirm the transfer</li>
+      </ol>
+    </div>
 
     <form id="withdraw-form">
       <label>Your User ID</label>
@@ -484,7 +516,7 @@
 
         // If we need to authenticate with exchange first
         if (data.needs_auth) {
-          setStatus(`Connecting to ${data.integration_type}...`, 'loading');
+          setStatus(`Step 1: Connect your ${data.integration_type} account to get your deposit address`, 'loading');
           console.log('Need to authenticate with exchange first');
 
           // Get auth link token
@@ -513,7 +545,7 @@
               console.log('brokerType:', p.brokerType);  // API type identifier
               console.log('type:', p.type);  // Alternative field name
               console.log('Full payload:', JSON.stringify(p, null, 2));
-              setStatus(`Connected to ${p.brokerName}! Preparing transfer...`, 'success');
+              setStatus(`Step 1 complete! Fetching your ${p.brokerName} deposit address...`, 'success');
 
               // Extract and save token if Easy Relogin enabled
               const tokenId = extractToken(p);
@@ -593,7 +625,7 @@
 
     // Open Mesh Link for wallet transfer
     async function openWalletTransfer(linkToken, depositAddress) {
-      setStatus('Opening wallet connection...', 'loading');
+      setStatus('Step 2: Connect your wallet to send funds to your exchange', 'loading');
       console.log('Deposit address:', depositAddress);
 
       // Show deposit address immediately so user knows where funds go
