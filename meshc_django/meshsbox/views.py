@@ -76,7 +76,10 @@ def api_link_token(request):
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
+        logger.warning("link-token: invalid JSON")
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    logger.info("link-token: request addr=%s symbol=%s wallet=%s", data.get('address', '')[:16], data.get('symbol'), data.get('wallet'))
 
     address = data.get('address')
     if not address:
@@ -116,11 +119,13 @@ def api_link_token(request):
                 api_url=config['api_url'],
             )
 
+        logger.info("link-token: created token expires=%s", result.expires_at)
         return JsonResponse({
             'link_token': result.token,
             'expires_at': result.expires_at,
         })
     except Exception as e:
+        logger.error("link-token: failed %s", e)
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -161,7 +166,8 @@ def api_save_token(request):
     )
 
     action = 'created' if created else 'updated'
-    logger.info("save-token: %s token=%s type=%s user=%s", action, token_id[:12], integration_type, user_id[:12])
+    logger.info("save-token: %s token_prefix=%s type=%s user=%s token_len=%d",
+                action, token_id[:20], integration_type, user_id[:12], len(token_id))
 
     return JsonResponse({'status': 'saved', 'action': action})
 
@@ -305,6 +311,9 @@ def api_withdraw_token(request):
     mode = data.get('mode', 'transfer')
     fresh_auth_token = data.get('auth_token')  # Token from recent exchange auth
 
+    logger.info("withdraw-token: request user=%s exchange=%s symbol=%s mode=%s has_auth_token=%s",
+                user_id[:12] if user_id else None, exchange, symbol, mode, bool(fresh_auth_token))
+
     if not user_id:
         return JsonResponse({'error': 'user_id is required'}, status=400)
     if not exchange:
@@ -360,6 +369,7 @@ def api_withdraw_token(request):
     # Mode: "transfer" - Create wallet link token for actual transfer
     # First, determine which auth token to use
     auth_token = fresh_auth_token  # Prefer fresh token from request
+    token_source = 'fresh' if fresh_auth_token else None
 
     if not auth_token:
         # Look up stored token from previous auth
@@ -372,6 +382,10 @@ def api_withdraw_token(request):
             ).first()
             if stored_token:
                 auth_token = stored_token.token_id
+                token_source = 'stored'
+                logger.info("withdraw: found stored token for %s type=%s", user_id[:12], integration_type)
+            else:
+                logger.info("withdraw: no stored token for %s type=%s", user_id[:12], integration_type)
         except Exception as e:
             logger.error("withdraw: failed to query IntegrationToken: %s", e)
             return JsonResponse({'error': 'Database error'}, status=500)
@@ -387,6 +401,9 @@ def api_withdraw_token(request):
 
     try:
         # Step 1: Get user's exchange deposit address
+        logger.info("withdraw: fetching deposit addr symbol=%s network=%s exchange=%s token_source=%s token_prefix=%s",
+                    symbol, network_id[:12], exchange_type, token_source, auth_token[:20] if auth_token else None)
+
         deposit_addr = get_exchange_deposit_address(
             client_id=config['client_id'],
             client_secret=config['client_secret'],
@@ -397,7 +414,8 @@ def api_withdraw_token(request):
             api_url=config['api_url'],
         )
 
-        logger.info("withdraw: got deposit address=%s for %s on %s", deposit_addr.address[:16], symbol, exchange_type)
+        logger.info("withdraw: got deposit address=%s chain=%s for %s on %s",
+                    deposit_addr.address[:16], deposit_addr.chain, symbol, exchange_type)
 
         # Step 2: Create link token with toAddresses = exchange deposit address
         to_address = ToAddress(
@@ -416,6 +434,7 @@ def api_withdraw_token(request):
             api_url=config['api_url'],
         )
 
+        logger.info("withdraw: created transfer token for %s to %s", user_id[:12], deposit_addr.address[:16])
         return JsonResponse({
             'link_token': result.token,
             'deposit_address': deposit_addr.address,
@@ -424,10 +443,12 @@ def api_withdraw_token(request):
         })
 
     except Exception as e:
-        logger.error("withdraw: failed to create token: %s", e)
         error_msg = str(e)
+        logger.error("withdraw: failed symbol=%s exchange=%s token_source=%s error=%s", symbol, exchange_type, token_source, error_msg)
+
         # If auth token is invalid/expired, tell frontend to re-auth
-        if 'authToken' in error_msg.lower() or 'auth' in error_msg.lower() or 'unauthorized' in error_msg.lower():
+        if 'authToken' in error_msg.lower() or 'auth' in error_msg.lower() or 'unauthorized' in error_msg.lower() or 'invalid' in error_msg.lower():
+            logger.info("withdraw: token invalid, returning needs_auth=true reason=token_expired")
             return JsonResponse({
                 'needs_auth': True,
                 'exchange': exchange,

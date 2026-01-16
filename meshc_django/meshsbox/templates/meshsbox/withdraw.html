@@ -127,39 +127,6 @@
     .copy-btn:hover { color: #ec4899; }
     .copy-btn svg { width: 20px; height: 20px; }
 
-    .exchange-select {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      background: #f9fafb;
-      margin-bottom: 1.25rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .exchange-select:focus-within {
-      border-color: #ec4899;
-      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
-      background: white;
-    }
-
-    .exchange-icon { width: 28px; height: 28px; flex-shrink: 0; }
-    .exchange-icon svg { width: 100%; height: 100%; }
-
-    .exchange-select select {
-      flex: 1;
-      border: none;
-      background: transparent;
-      padding: 0.25rem 0;
-      font-weight: 500;
-    }
-
-    .exchange-select select:focus {
-      box-shadow: none;
-    }
-
     .symbol-select {
       display: flex;
       align-items: center;
@@ -279,6 +246,32 @@
       font-family: 'SF Mono', Monaco, monospace;
       max-height: 300px;
     }
+
+    .deposit-address {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+      border: 1px solid #fbcfe8;
+      border-radius: 12px;
+    }
+
+    .deposit-address h3 {
+      font-size: 0.85rem;
+      color: #9d174d;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    .address-value {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.8rem;
+      color: #1f2937;
+      word-break: break-all;
+      background: white;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #f9a8d4;
+    }
   </style>
 </head>
 <body>
@@ -307,15 +300,6 @@
         </button>
       </div>
 
-      <label>Destination Exchange</label>
-      <div class="exchange-select">
-        <span class="exchange-icon" id="exchange-icon"></span>
-        <select name="exchange" id="exchange-dropdown">
-          <option value="coinbase">Coinbase</option>
-          <option value="binanceInternational">Binance</option>
-        </select>
-      </div>
-
       <label>Symbol</label>
       <div class="symbol-select">
         <span class="symbol-icon" id="symbol-icon"></span>
@@ -341,6 +325,11 @@
 
     <div id="status" class="status"></div>
 
+    <div class="deposit-address" id="deposit-address-display" style="display: none;">
+      <h3>Deposit Address</h3>
+      <div class="address-value" id="deposit-address-value"></div>
+    </div>
+
     <div class="results" id="results">
       <h3>Result</h3>
       <pre id="result-json"></pre>
@@ -360,21 +349,6 @@
   </script>
 
   <script type="module">
-    const exchangeIcons = {
-      coinbase: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="12" fill="#0052FF"/>
-        <path d="M12 6C8.688 6 6 8.688 6 12C6 15.312 8.688 18 12 18C15.312 18 18 15.312 18 12C18 8.688 15.312 6 12 6ZM12 15.6C10.008 15.6 8.4 13.992 8.4 12C8.4 10.008 10.008 8.4 12 8.4C13.992 8.4 15.6 10.008 15.6 12C15.6 13.992 13.992 15.6 12 15.6Z" fill="white"/>
-      </svg>`,
-      binanceInternational: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="12" fill="#F3BA2F"/>
-        <path d="M12 5L9.5 7.5L12 10L14.5 7.5L12 5Z" fill="#181A20"/>
-        <path d="M7.5 9.5L5 12L7.5 14.5L10 12L7.5 9.5Z" fill="#181A20"/>
-        <path d="M16.5 9.5L14 12L16.5 14.5L19 12L16.5 9.5Z" fill="#181A20"/>
-        <path d="M12 14L9.5 16.5L12 19L14.5 16.5L12 14Z" fill="#181A20"/>
-        <path d="M12 10.5L10.5 12L12 13.5L13.5 12L12 10.5Z" fill="#181A20"/>
-      </svg>`
-    };
-
     const tokenIcons = {
       XLM: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="12" fill="#000"/>
@@ -398,22 +372,14 @@
       </svg>`
     };
 
-    const exchangeSelect = document.getElementById('exchange-dropdown');
-    const exchangeIcon = document.getElementById('exchange-icon');
     const symbolSelect = document.getElementById('symbol-dropdown');
     const symbolIcon = document.getElementById('symbol-icon');
-
-    function updateExchangeIcon() {
-      exchangeIcon.innerHTML = exchangeIcons[exchangeSelect.value] || '';
-    }
 
     function updateSymbolIcon() {
       symbolIcon.innerHTML = tokenIcons[symbolSelect.value] || '';
     }
 
-    exchangeSelect.addEventListener('change', updateExchangeIcon);
     symbolSelect.addEventListener('change', updateSymbolIcon);
-    updateExchangeIcon();
     updateSymbolIcon();
 
     const form = document.getElementById('withdraw-form');
@@ -421,6 +387,8 @@
     const submitBtn = document.getElementById('submit-btn');
     const resultsEl = document.getElementById('results');
     const resultJson = document.getElementById('result-json');
+    const depositAddressDisplay = document.getElementById('deposit-address-display');
+    const depositAddressValue = document.getElementById('deposit-address-value');
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
     function setStatus(msg, type) {
@@ -473,7 +441,7 @@
 
       const fd = new FormData(form);
       const userId = fd.get('user_id');
-      const exchange = fd.get('exchange');
+      const exchange = 'binanceInternational';  // Hardcoded for sandbox testing
       const symbol = fd.get('symbol');
       const amount = fd.get('amount') ? parseFloat(fd.get('amount')) : null;
       const easyRelogin = fd.get('easy_relogin') === 'on';
@@ -584,10 +552,21 @@
       }
     });
 
+    // Show deposit address in UI
+    function showDepositAddress(address) {
+      if (address) {
+        depositAddressValue.textContent = address;
+        depositAddressDisplay.style.display = 'block';
+      }
+    }
+
     // Open Mesh Link for wallet transfer
     async function openWalletTransfer(linkToken, depositAddress) {
       setStatus('Opening wallet connection...', 'loading');
       console.log('Deposit address:', depositAddress);
+
+      // Show deposit address immediately so user knows where funds go
+      showDepositAddress(depositAddress);
 
       const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
 

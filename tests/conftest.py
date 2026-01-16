@@ -45,3 +45,27 @@ def mock_networks_response():
             ]
         }
     }
+
+
+@pytest.fixture
+def mock_deposit_address_response():
+    """Mock API response for exchange deposit address."""
+    return {
+        "content": {
+            "symbol": "USDC",
+            "address": "0x1234567890abcdef1234567890abcdef12345678",
+            "chain": "ETH",
+        }
+    }
+
+
+@pytest.fixture
+def mock_deposit_address_stellar_response():
+    """Mock API response for Stellar deposit address."""
+    return {
+        "content": {
+            "symbol": "USDC",
+            "address": "GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX",
+            "chain": "Stellar",
+        }
+    }

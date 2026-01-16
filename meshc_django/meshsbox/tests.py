@@ -174,3 +174,262 @@ class WebhookApiTests(TestCase):
             data=json.dumps({"TransactionId": "bpv111", "TransferStatus": "Pending"}),
             content_type='application/json')
         self.assertEqual(response.status_code, 403)
+
+
+class WithdrawViewTests(SimpleTestCase):
+    """Tests for the withdraw view (wallet → exchange)."""
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_renders(self):
+        """Withdraw page loads successfully."""
+        response = self.client.get('/meshc/withdraw/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Withdraw to Exchange')
+
+    def test_contains_form_elements(self):
+        """Withdraw page contains required form elements."""
+        response = self.client.get('/meshc/withdraw/')
+        self.assertContains(response, 'user_id')
+        self.assertContains(response, 'symbol')
+        self.assertContains(response, 'easy_relogin')
+
+
+class ApiWithdrawTokenTests(TestCase):
+    """Tests for the withdraw token API endpoint."""
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_requires_post(self):
+        """API rejects GET requests."""
+        response = self.client.get('/meshc/api/withdraw-token/')
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_json(self):
+        """API rejects non-JSON body."""
+        response = self.client.post('/meshc/api/withdraw-token/', data='bad', content_type='text/plain')
+        self.assertEqual(response.status_code, 400)
+
+    def test_requires_user_id(self):
+        """API requires user_id field."""
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({'exchange': 'coinbase', 'symbol': 'USDC'}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('user_id', response.json()['error'])
+
+    def test_requires_exchange(self):
+        """API requires exchange field."""
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({'user_id': 'test', 'symbol': 'USDC'}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('exchange', response.json()['error'])
+
+    def test_requires_symbol(self):
+        """API requires symbol field."""
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({'user_id': 'test', 'exchange': 'coinbase'}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('symbol', response.json()['error'])
+
+    def test_rejects_unsupported_symbol(self):
+        """API rejects unsupported symbol."""
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({'user_id': 'test', 'exchange': 'coinbase', 'symbol': 'DOGE'}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Unsupported symbol', response.json()['error'])
+
+    def test_needs_auth_when_no_stored_token(self):
+        """Returns needs_auth=true when no stored token exists."""
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({
+                'user_id': 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+                'exchange': 'coinbase',
+                'symbol': 'USDC'
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('needs_auth'))
+        self.assertEqual(data.get('exchange'), 'coinbase')
+        self.assertEqual(data.get('integration_type'), 'Coinbase')
+
+    @patch('meshsbox.views.create_link_token')
+    @patch('meshsbox.views.load_config')
+    def test_auth_mode_returns_link_token(self, mock_config, mock_create):
+        """Auth mode returns link token for exchange connection."""
+        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
+        mock_create.return_value = MagicMock(token='auth-link-token', expires_at='2025-01-01')
+
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({
+                'user_id': 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+                'exchange': 'coinbase',
+                'symbol': 'USDC',
+                'mode': 'auth'
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['link_token'], 'auth-link-token')
+        self.assertEqual(data['mode'], 'auth')
+
+    @patch('meshsbox.views.create_link_token')
+    @patch('meshsbox.views.get_exchange_deposit_address')
+    @patch('meshsbox.views.load_config')
+    def test_transfer_mode_with_fresh_auth_token(self, mock_config, mock_get_addr, mock_create):
+        """Transfer mode with fresh auth_token returns link token and deposit address."""
+        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
+        mock_get_addr.return_value = MagicMock(address='0x1234abcd', chain='ETH')
+        mock_create.return_value = MagicMock(token='transfer-link-token', expires_at='2025-01-01')
+
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({
+                'user_id': 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+                'exchange': 'coinbase',
+                'symbol': 'USDC',
+                'auth_token': 'fresh-auth-token'
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['link_token'], 'transfer-link-token')
+        self.assertEqual(data['deposit_address'], '0x1234abcd')
+        self.assertEqual(data['chain'], 'ETH')
+
+    @patch('meshsbox.views.create_link_token')
+    @patch('meshsbox.views.get_exchange_deposit_address')
+    @patch('meshsbox.views.load_config')
+    def test_transfer_mode_with_stored_token(self, mock_config, mock_get_addr, mock_create):
+        """Transfer mode uses stored token from database."""
+        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
+        mock_get_addr.return_value = MagicMock(address='GDEPOSIT...', chain='Stellar')
+        mock_create.return_value = MagicMock(token='stored-link-token', expires_at='2025-01-01')
+
+        # Create stored token
+        from meshsbox.models import IntegrationToken
+        IntegrationToken.objects.create(
+            token_id='stored-auth-token',
+            integration_type='Coinbase',
+            user_id='GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+            status='active',
+        )
+
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({
+                'user_id': 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
+                'exchange': 'coinbase',
+                'symbol': 'USDC',
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['link_token'], 'stored-link-token')
+
+        # Verify stored token was used
+        mock_get_addr.assert_called_once()
+        call_kwargs = mock_get_addr.call_args[1]
+        self.assertEqual(call_kwargs['auth_token'], 'stored-auth-token')
+
+    @patch('meshsbox.views.get_exchange_deposit_address')
+    @patch('meshsbox.views.load_config')
+    def test_expired_token_returns_needs_auth(self, mock_config, mock_get_addr):
+        """Returns needs_auth when stored token is expired."""
+        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
+        mock_get_addr.side_effect = Exception('Invalid authToken')
+
+        # Create stored token
+        from meshsbox.models import IntegrationToken
+        IntegrationToken.objects.create(
+            token_id='expired-token',
+            integration_type='Coinbase',
+            user_id='GBXYTEST',
+            status='active',
+        )
+
+        response = self.client.post('/meshc/api/withdraw-token/',
+            data=json.dumps({
+                'user_id': 'GBXYTEST',
+                'exchange': 'coinbase',
+                'symbol': 'USDC',
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('needs_auth'))
+        self.assertEqual(data.get('reason'), 'token_expired')
+
+
+class ApiSaveTokenTests(TestCase):
+    """Tests for the save token API endpoint (Easy Relogin)."""
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_requires_post(self):
+        """API rejects GET requests."""
+        response = self.client.get('/meshc/api/save-token/')
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_all_fields(self):
+        """API requires token_id, integration_type, and user_id."""
+        response = self.client.post('/meshc/api/save-token/',
+            data=json.dumps({'token_id': 'tok'}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_creates_new_token(self):
+        """Creates new IntegrationToken record."""
+        response = self.client.post('/meshc/api/save-token/',
+            data=json.dumps({
+                'token_id': 'new-token-123',
+                'integration_type': 'Coinbase',
+                'user_id': 'GBXYUSER...'
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'saved')
+        self.assertEqual(data['action'], 'created')
+
+        from meshsbox.models import IntegrationToken
+        token = IntegrationToken.objects.get(token_id='new-token-123')
+        self.assertEqual(token.integration_type, 'Coinbase')
+        self.assertEqual(token.user_id, 'GBXYUSER...')
+        self.assertEqual(token.status, 'active')
+
+    def test_updates_existing_token(self):
+        """Updates existing IntegrationToken record."""
+        from meshsbox.models import IntegrationToken
+        IntegrationToken.objects.create(
+            token_id='existing-token',
+            integration_type='Coinbase',
+            user_id='old-user',
+            status='active',
+        )
+
+        response = self.client.post('/meshc/api/save-token/',
+            data=json.dumps({
+                'token_id': 'existing-token',
+                'integration_type': 'Coinbase',
+                'user_id': 'new-user'
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['action'], 'updated')
+
+        token = IntegrationToken.objects.get(token_id='existing-token')
+        self.assertEqual(token.user_id, 'new-user')

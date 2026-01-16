@@ -4,10 +4,12 @@ from pytest_httpx import HTTPXMock
 
 from meshc import (
     AccountToken,
+    ExchangeDepositAddress,
     MeshAPIError,
     ToAddress,
     create_link_token,
     get_account_tokens_for_user,
+    get_exchange_deposit_address,
     get_networks,
 )
 from meshc.storage import init_db, store_token
@@ -225,3 +227,120 @@ class TestGetAccountTokensForUser:
         """Test returns empty list when no tokens found."""
         tokens = get_account_tokens_for_user(user_id="nonexistent")
         assert tokens == []
+
+
+class TestGetExchangeDepositAddress:
+    """Tests for get_exchange_deposit_address() - wallet → exchange flow."""
+
+    def test_success(self, httpx_mock: HTTPXMock, mock_config, mock_deposit_address_response):
+        """Returns deposit address from exchange API."""
+        httpx_mock.add_response(json=mock_deposit_address_response)
+
+        result = get_exchange_deposit_address(
+            client_id=mock_config["client_id"],
+            client_secret=mock_config["client_secret"],
+            auth_token="test-auth-token",
+            symbol="USDC",
+            network_id="e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
+            exchange_type="coinbase",
+            api_url=mock_config["api_url"],
+        )
+
+        assert isinstance(result, ExchangeDepositAddress)
+        assert result.address == "0x1234567890abcdef1234567890abcdef12345678"
+        assert result.symbol == "USDC"
+        assert result.chain == "ETH"
+
+    def test_stellar_address(self, httpx_mock: HTTPXMock, mock_config, mock_deposit_address_stellar_response):
+        """Returns Stellar deposit address."""
+        httpx_mock.add_response(json=mock_deposit_address_stellar_response)
+
+        result = get_exchange_deposit_address(
+            client_id=mock_config["client_id"],
+            client_secret=mock_config["client_secret"],
+            auth_token="test-auth-token",
+            symbol="USDC",
+            network_id="06855704-43d2-4ad2-a73c-372f0c3534e1",
+            exchange_type="coinbase",
+            api_url=mock_config["api_url"],
+        )
+
+        assert result.address.startswith("G")
+        assert result.chain == "Stellar"
+
+    def test_request_payload(self, httpx_mock: HTTPXMock, mock_config, mock_deposit_address_response):
+        """Verifies correct payload sent to API."""
+        httpx_mock.add_response(json=mock_deposit_address_response)
+
+        get_exchange_deposit_address(
+            client_id=mock_config["client_id"],
+            client_secret=mock_config["client_secret"],
+            auth_token="my-auth-token",
+            symbol="ETH",
+            network_id="net-123",
+            exchange_type="binanceInternational",
+            api_url=mock_config["api_url"],
+        )
+
+        import json
+        request = httpx_mock.get_requests()[0]
+        payload = json.loads(request.content)
+
+        assert payload["symbol"] == "ETH"
+        assert payload["networkId"] == "net-123"
+        assert payload["authToken"] == "my-auth-token"
+        assert payload["type"] == "binanceInternational"
+
+    def test_missing_address_raises(self, httpx_mock: HTTPXMock, mock_config):
+        """Raises MeshAPIError when API returns no address."""
+        httpx_mock.add_response(json={"content": {"symbol": "USDC"}})  # No address
+
+        with pytest.raises(MeshAPIError) as exc:
+            get_exchange_deposit_address(
+                client_id=mock_config["client_id"],
+                client_secret=mock_config["client_secret"],
+                auth_token="test-token",
+                symbol="USDC",
+                network_id="net-123",
+                exchange_type="coinbase",
+                api_url=mock_config["api_url"],
+            )
+
+        assert "No deposit address" in str(exc.value)
+
+    def test_invalid_auth_token_raises(self, httpx_mock: HTTPXMock, mock_config):
+        """Raises MeshAPIError on authentication failure."""
+        httpx_mock.add_response(
+            status_code=401,
+            json={"message": "Invalid or expired authToken"},
+        )
+
+        with pytest.raises(MeshAPIError) as exc:
+            get_exchange_deposit_address(
+                client_id=mock_config["client_id"],
+                client_secret=mock_config["client_secret"],
+                auth_token="expired-token",
+                symbol="USDC",
+                network_id="net-123",
+                exchange_type="coinbase",
+                api_url=mock_config["api_url"],
+            )
+
+        assert exc.value.status_code == 401
+
+    def test_api_url_construction(self, httpx_mock: HTTPXMock, mock_config, mock_deposit_address_response):
+        """Verifies correct API endpoint is called."""
+        httpx_mock.add_response(json=mock_deposit_address_response)
+
+        get_exchange_deposit_address(
+            client_id=mock_config["client_id"],
+            client_secret=mock_config["client_secret"],
+            auth_token="test-token",
+            symbol="USDC",
+            network_id="net-123",
+            exchange_type="coinbase",
+            api_url=mock_config["api_url"],
+        )
+
+        request = httpx_mock.get_requests()[0]
+        assert "/api/v1/transfers/managed/address/get" in str(request.url)
