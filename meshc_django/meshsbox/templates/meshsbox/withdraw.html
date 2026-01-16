@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Mesh Connect Sandbox</title>
+  <title>Mesh Connect Sandbox - Withdraw</title>
   <link rel="icon" type="image/x-icon" href="{% static 'meshsbox/favicon.ico' %}">
   <link rel="icon" type="image/png" sizes="512x512" href="{% static 'meshsbox/favicon-512.png' %}">
   <link rel="apple-touch-icon" href="{% static 'meshsbox/favicon-512.png' %}">
@@ -18,7 +18,7 @@
     body {
       font-family: 'Inter', system-ui, sans-serif;
       min-height: 100vh;
-      background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 50%, #b39ddb 100%);
+      background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 50%, #ce93d8 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -45,13 +45,13 @@
       transition: color 0.2s;
     }
 
-    .nav-link:hover { color: #6366f1; }
+    .nav-link:hover { color: #4f46e5; }
 
     .header {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      margin-bottom: 2rem;
+      margin-bottom: 0.5rem;
     }
 
     .header-icon {
@@ -63,6 +63,12 @@
       font-size: 1.5rem;
       font-weight: 600;
       color: #1a1a2e;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
     }
 
     label {
@@ -94,8 +100,8 @@
 
     input:focus, select:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: #ec4899;
+      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
       background: white;
     }
 
@@ -118,8 +124,41 @@
       transition: color 0.2s;
     }
 
-    .copy-btn:hover { color: #6366f1; }
+    .copy-btn:hover { color: #ec4899; }
     .copy-btn svg { width: 20px; height: 20px; }
+
+    .exchange-select {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #f9fafb;
+      margin-bottom: 1.25rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .exchange-select:focus-within {
+      border-color: #ec4899;
+      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
+      background: white;
+    }
+
+    .exchange-icon { width: 28px; height: 28px; flex-shrink: 0; }
+    .exchange-icon svg { width: 100%; height: 100%; }
+
+    .exchange-select select {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 0.25rem 0;
+      font-weight: 500;
+    }
+
+    .exchange-select select:focus {
+      box-shadow: none;
+    }
 
     .symbol-select {
       display: flex;
@@ -134,8 +173,8 @@
     }
 
     .symbol-select:focus-within {
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: #ec4899;
+      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
       background: white;
     }
 
@@ -154,38 +193,12 @@
       box-shadow: none;
     }
 
-    .checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 0.625rem;
-      margin-bottom: 1.5rem;
-      padding: 0.75rem 1rem;
-      background: #f0f9ff;
-      border-radius: 10px;
-      border: 1px solid #e0f2fe;
-    }
-
-    .checkbox-row input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: #6366f1;
-      cursor: pointer;
-    }
-
-    .checkbox-row label {
-      margin: 0;
-      font-weight: 400;
-      font-size: 0.85rem;
-      color: #0369a1;
-      cursor: pointer;
-    }
-
     .submit-btn {
       width: 100%;
       padding: 1rem;
       border: none;
       border-radius: 12px;
-      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
       color: white;
       font-family: inherit;
       font-size: 1rem;
@@ -196,7 +209,7 @@
 
     .submit-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+      box-shadow: 0 10px 20px -5px rgba(236, 72, 153, 0.4);
     }
 
     .submit-btn:active { transform: translateY(0); }
@@ -217,7 +230,7 @@
 
     .status.success { background: #d1fae5; color: #065f46; }
     .status.error { background: #fee2e2; color: #991b1b; }
-    .status.loading { background: #e0e7ff; color: #3730a3; }
+    .status.loading { background: #fce7f3; color: #9d174d; }
 
     .results {
       margin-top: 1.5rem;
@@ -240,62 +253,78 @@
       font-family: 'SF Mono', Monaco, monospace;
       max-height: 300px;
     }
+
+    .info-box {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.85rem;
+      color: #92400e;
+    }
+
+    .info-box strong {
+      display: block;
+      margin-bottom: 0.25rem;
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <a href="{% url 'withdraw' %}" class="nav-link">
-      Switch to Withdraw
+    <a href="{% url 'index' %}" class="nav-link">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
       </svg>
+      Back to Deposit
     </a>
 
     <div class="header">
       <img src="{% static 'meshsbox/favicon-512.png' %}" alt="Mesh" class="header-icon">
-      <h1>Mesh Connect Sandbox</h1>
+      <h1>Withdraw to Exchange</h1>
+    </div>
+    <p class="subtitle">Transfer from your wallet to your exchange account</p>
+
+    <div class="info-box">
+      <strong>Prerequisite:</strong>
+      You must complete a deposit with "Easy Relogin" enabled first. This stores your exchange connection.
     </div>
 
-    <form id="token-form">
-      <label>Wallet Address</label>
+    <form id="withdraw-form">
+      <label>Your User ID</label>
       <div class="input-wrapper input-with-copy">
-        <input type="text" name="address" value="GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX" required>
-        <button type="button" class="copy-btn" onclick="copyAddress()" title="Copy address">
+        <input type="text" name="user_id" value="GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX" required>
+        <button type="button" class="copy-btn" onclick="copyUserId()" title="Copy user ID">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
           </svg>
         </button>
       </div>
 
+      <label>Destination Exchange</label>
+      <div class="exchange-select">
+        <span class="exchange-icon" id="exchange-icon"></span>
+        <select name="exchange" id="exchange-dropdown">
+          <option value="coinbase">Coinbase</option>
+          <option value="binanceInternational">Binance</option>
+        </select>
+      </div>
+
       <label>Symbol</label>
       <div class="symbol-select">
         <span class="symbol-icon" id="symbol-icon"></span>
         <select name="symbol" id="symbol-dropdown">
-          <option value="XLM">XLM - Stellar Lumens</option>
-          <option value="USDC" selected>USDC - USD Coin</option>
-          <option value="SEPOLIAETH">ETH - Ethereum (Sepolia)</option>
+          <option value="ETH" selected>ETH - Ethereum</option>
+          <option value="USDC">USDC - USD Coin</option>
         </select>
       </div>
 
       <label>Amount (optional)</label>
       <div class="input-wrapper">
-        <input type="number" name="amount" step="0.01" placeholder="100.00">
+        <input type="number" name="amount" step="0.01" placeholder="0.1">
       </div>
 
-      <label>Mode</label>
-      <div class="input-wrapper">
-        <select name="wallet">
-          <option value="false">CEX (Stellar testnet)</option>
-          <option value="true">Wallet (Sepolia testnet)</option>
-        </select>
-      </div>
-
-      <div class="checkbox-row">
-        <input type="checkbox" name="easy_relogin" id="easy_relogin" checked>
-        <label for="easy_relogin">Easy Relogin (save for faster access)</label>
-      </div>
-
-      <button type="submit" class="submit-btn" id="submit-btn">Continue</button>
+      <button type="submit" class="submit-btn" id="submit-btn">Withdraw to Exchange</button>
     </form>
 
     <div id="status" class="status"></div>
@@ -307,8 +336,8 @@
   </div>
 
   <script>
-    function copyAddress() {
-      const input = document.querySelector('input[name="address"]');
+    function copyUserId() {
+      const input = document.querySelector('input[name="user_id"]');
       navigator.clipboard.writeText(input.value);
       const btn = document.querySelector('.copy-btn');
       btn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
@@ -319,52 +348,58 @@
   </script>
 
   <script type="module">
+    const exchangeIcons = {
+      coinbase: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#0052FF"/>
+        <path d="M12 6C8.688 6 6 8.688 6 12C6 15.312 8.688 18 12 18C15.312 18 18 15.312 18 12C18 8.688 15.312 6 12 6ZM12 15.6C10.008 15.6 8.4 13.992 8.4 12C8.4 10.008 10.008 8.4 12 8.4C13.992 8.4 15.6 10.008 15.6 12C15.6 13.992 13.992 15.6 12 15.6Z" fill="white"/>
+      </svg>`,
+      binanceInternational: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#F3BA2F"/>
+        <path d="M12 5L9.5 7.5L12 10L14.5 7.5L12 5Z" fill="#181A20"/>
+        <path d="M7.5 9.5L5 12L7.5 14.5L10 12L7.5 9.5Z" fill="#181A20"/>
+        <path d="M16.5 9.5L14 12L16.5 14.5L19 12L16.5 9.5Z" fill="#181A20"/>
+        <path d="M12 14L9.5 16.5L12 19L14.5 16.5L12 14Z" fill="#181A20"/>
+        <path d="M12 10.5L10.5 12L12 13.5L13.5 12L12 10.5Z" fill="#181A20"/>
+      </svg>`
+    };
+
     const tokenIcons = {
-      XLM: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="12" fill="#000"/>
-        <path d="M5.82599 12.849C5.64728 11.4424 5.91822 10.0152 6.59999 8.77192C7.13248 7.79807 7.90984 6.98001 8.85529 6.39858C9.78502 5.82794 10.852 5.51969 11.9428 5.50651C13.0334 5.49576 14.1064 5.78082 15.0479 6.33134L16.4735 5.57375C15.3486 4.71797 14.0029 4.20097 12.5945 4.08346C11.1905 3.97 9.78342 4.26236 8.54081 4.92575C7.27813 5.60239 6.22771 6.61579 5.50622 7.85339C4.66588 9.28946 4.28236 10.9472 4.40664 12.6065C4.42751 12.8897 4.36727 13.1731 4.23299 13.4233C4.09905 13.6722 3.89788 13.8733 3.65435 14.0031L3 14.3508V15.9735L21 6.40757V4.78599L5.82599 12.849ZM21 8.03075L6.79058 15.5759L3 17.5913V19.2124L18.1777 11.1469C18.2131 11.4306 18.2306 11.716 18.2306 12.0019C18.2312 13.1316 17.9469 14.2431 17.4042 15.234C16.8712 16.2089 16.0927 17.0279 15.1457 17.6094C14.2146 18.1802 13.1462 18.4879 12.054 18.4998C10.9666 18.5104 9.89558 18.2241 8.94688 17.6692L8.87063 17.7116L7.52593 18.4263C8.65041 19.282 9.99576 19.7992 11.4038 19.917C12.8079 20.0307 14.2149 19.7386 15.4576 19.0753C16.7202 18.3994 17.7707 17.3867 18.4927 16.1498C19.3345 14.7122 19.7184 13.0525 19.5934 11.3914C19.5726 11.1085 19.6329 10.8253 19.7669 10.5751C19.8982 10.3291 20.0995 10.1274 20.3451 9.99543L21 9.64757V8.03075Z" fill="white"/>
+      ETH: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#627EEA"/>
+        <path d="M12.0001 3V9.65073L17.6249 12.1661L12.0001 3Z" fill="white" fill-opacity="0.6"/>
+        <path d="M11.9999 3L6.37512 12.1661L11.9999 9.65073V3Z" fill="white"/>
+        <path d="M12.0001 16.477V20.9993L17.6249 13.2146L12.0001 16.477Z" fill="white" fill-opacity="0.6"/>
+        <path d="M11.9999 20.9993V16.477L6.37512 13.2146L11.9999 20.9993Z" fill="white"/>
+        <path d="M12.0001 15.4291L17.6249 12.1668L12.0001 9.65137V15.4291Z" fill="white" fill-opacity="0.2"/>
+        <path d="M6.37512 12.1668L11.9999 15.4291V9.65137L6.37512 12.1668Z" fill="white" fill-opacity="0.6"/>
       </svg>`,
       USDC: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02943 16.9706 3 12 3C7.02943 3 3 7.02943 3 12C3 16.9706 7.02943 21 12 21Z" fill="#0B53BF"/>
         <path d="M13.6201 5.45V6.60874C15.9319 7.30624 17.625 9.45495 17.625 12.003C17.625 14.5511 15.9319 16.6999 13.6201 17.3973V18.5561C16.5675 17.8361 18.75 15.1755 18.75 12.003C18.75 8.83059 16.5675 6.16999 13.6201 5.45Z" fill="white"/>
         <path d="M6.37499 12.003C6.37499 9.45495 8.06809 7.30624 10.3799 6.60874V5.45C7.43247 6.16999 5.25 8.83059 5.25 12.003C5.25 15.1755 7.43247 17.8361 10.3799 18.5561V17.3973C8.06809 16.7055 6.37499 14.5511 6.37499 12.003Z" fill="white"/>
         <path d="M14.4188 13.2575C14.4188 10.9569 10.8132 11.9019 10.8132 10.6306C10.8132 10.175 11.1788 9.8825 11.8763 9.8825C12.7088 9.8825 12.9957 10.2875 13.0857 10.8331H14.2331C14.1308 9.80916 13.5431 9.16262 12.5626 8.97002V8.06565H11.4376V8.93774C10.3634 9.07454 9.6882 9.70009 9.6882 10.6306C9.6882 12.9425 13.2994 12.0762 13.2994 13.325C13.2994 13.7974 12.8438 14.1124 12.0732 14.1124C11.0663 14.1124 10.7344 13.6681 10.6107 13.055H9.49133C9.56385 14.1765 10.2554 14.8784 11.4376 15.0536V15.9405H12.5626V15.0654C13.7163 14.9164 14.4188 14.2452 14.4188 13.2575Z" fill="white"/>
-      </svg>`,
-      SEPOLIAETH: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12.0001 3V9.65073L17.6249 12.1661L12.0001 3Z" fill="#8FFCF3"/>
-        <path d="M11.9999 3L6.37512 12.1661L11.9999 9.65073V3Z" fill="#CABCF8"/>
-        <path d="M12.0001 16.477V20.9993L17.6249 13.2146L12.0001 16.477Z" fill="#CBA7F5"/>
-        <path d="M11.9999 20.9993V16.477L6.37512 13.2146L11.9999 20.9993Z" fill="#74A0F3"/>
-        <path d="M12.0001 15.4291L17.6249 12.1668L12.0001 9.65137V15.4291Z" fill="#CBA7F5"/>
-        <path d="M6.37512 12.1668L11.9999 15.4291V9.65137L6.37512 12.1668Z" fill="#74A0F3"/>
-        <path fill-rule="evenodd" clip-rule="evenodd" d="M11.9999 15.4285L6.37512 12.1661L11.9999 3L17.6248 12.1661L11.9999 15.4285ZM6.74861 11.9006L11.9099 3.49048V9.60573L6.74861 11.9006ZM6.67211 12.1301L11.9099 9.80373V15.1675L6.67211 12.1301ZM12.0899 9.80373V15.1675L17.3232 12.1301L12.0899 9.80373ZM12.0899 9.60573L17.2512 11.9006L12.0899 3.49048V9.60573Z" fill="#202699"/>
-        <path fill-rule="evenodd" clip-rule="evenodd" d="M11.9999 16.4057L6.37512 13.2109L11.9999 21L17.6248 13.2109L11.9999 16.4057ZM7.0051 13.7734L11.9099 16.5632V20.5681L7.0051 13.7734ZM12.0899 16.5632V20.5681L16.9948 13.7734L12.0899 16.5632Z" fill="#202699"/>
       </svg>`
     };
 
-    const defaultAddresses = {
-      XLM: 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
-      USDC: 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
-      SEPOLIAETH: '0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c',
-    };
-
+    const exchangeSelect = document.getElementById('exchange-dropdown');
+    const exchangeIcon = document.getElementById('exchange-icon');
     const symbolSelect = document.getElementById('symbol-dropdown');
     const symbolIcon = document.getElementById('symbol-icon');
-    const addressInput = document.querySelector('input[name="address"]');
+
+    function updateExchangeIcon() {
+      exchangeIcon.innerHTML = exchangeIcons[exchangeSelect.value] || '';
+    }
 
     function updateSymbolIcon() {
       symbolIcon.innerHTML = tokenIcons[symbolSelect.value] || '';
-      const currentAddr = addressInput.value;
-      const isDefault = Object.values(defaultAddresses).includes(currentAddr);
-      if (isDefault || !currentAddr) {
-        addressInput.value = defaultAddresses[symbolSelect.value] || '';
-      }
     }
 
+    exchangeSelect.addEventListener('change', updateExchangeIcon);
     symbolSelect.addEventListener('change', updateSymbolIcon);
+    updateExchangeIcon();
     updateSymbolIcon();
 
-    const form = document.getElementById('token-form');
+    const form = document.getElementById('withdraw-form');
     const statusEl = document.getElementById('status');
     const submitBtn = document.getElementById('submit-btn');
     const resultsEl = document.getElementById('results');
@@ -380,22 +415,18 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       submitBtn.disabled = true;
-      setStatus('Requesting token...', 'loading');
+      setStatus('Fetching exchange deposit address...', 'loading');
 
       const fd = new FormData(form);
-      const userAddress = fd.get('address');
-      const easyRelogin = fd.get('easy_relogin') === 'on';
-
       const payload = {
-        address: userAddress,
+        user_id: fd.get('user_id'),
+        exchange: fd.get('exchange'),
         symbol: fd.get('symbol'),
         amount: fd.get('amount') ? parseFloat(fd.get('amount')) : null,
-        wallet: fd.get('wallet') === 'true',
-        user_id: userAddress,
       };
 
       try {
-        const resp = await fetch('/meshc/api/link-token/', {
+        const resp = await fetch('/meshc/api/withdraw-token/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -404,65 +435,24 @@
           body: JSON.stringify(payload),
         });
 
-        if (!resp.ok) throw new Error((await resp.json()).error || 'API error');
+        const data = await resp.json();
 
-        const { link_token } = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.error || 'API error');
+        }
+
         setStatus('Opening Mesh Link...', 'loading');
 
         const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
 
         const link = createLink({
           clientId: 'meshc-django',
-          onIntegrationConnected: (p) => setStatus(`Connected to ${p.brokerName}`, 'success'),
+          onIntegrationConnected: (p) => setStatus(`Connected wallet: ${p.brokerName}`, 'success'),
           onTransferFinished: async (p) => {
             setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
             resultJson.textContent = JSON.stringify(p, null, 2);
             resultsEl.style.display = 'block';
-
             console.log('onTransferFinished payload:', JSON.stringify(p, null, 2));
-
-            if (easyRelogin && p.status === 'success') {
-              console.log('Easy Relogin: attempting to save token...');
-              try {
-                let tokenId = null;
-                let brokerName = p.brokerName || 'Unknown';
-
-                if (p.accessToken?.accountTokens?.[0]?.accessToken) {
-                  tokenId = p.accessToken.accountTokens[0].accessToken;
-                  brokerName = p.accessToken.brokerName || brokerName;
-                  console.log('Found token in accessToken.accountTokens[0]');
-                } else if (p.accessToken?.accessToken) {
-                  tokenId = p.accessToken.accessToken;
-                  console.log('Found token in accessToken.accessToken');
-                } else if (p.accountTokens?.[0]?.accessToken) {
-                  tokenId = p.accountTokens[0].accessToken;
-                  console.log('Found token in accountTokens[0]');
-                } else if (p.tokenId) {
-                  tokenId = p.tokenId;
-                  console.log('Found token in tokenId');
-                }
-
-                if (tokenId) {
-                  const saveResp = await fetch('/meshc/api/save-token/', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'X-CSRFToken': csrfToken,
-                    },
-                    body: JSON.stringify({
-                      token_id: tokenId,
-                      integration_type: brokerName,
-                      user_id: userAddress,
-                    }),
-                  });
-                  console.log('Easy Relogin: token saved!', await saveResp.json());
-                } else {
-                  console.warn('Easy Relogin: no token found in response. Keys:', Object.keys(p));
-                }
-              } catch (saveErr) {
-                console.warn('Easy Relogin: failed to save token', saveErr);
-              }
-            }
           },
           onExit: (err) => {
             submitBtn.disabled = false;
@@ -470,7 +460,12 @@
           },
         });
 
-        link.openLink(link_token);
+        // Show deposit address info
+        if (data.deposit_address) {
+          console.log('Deposit address:', data.deposit_address);
+        }
+
+        link.openLink(data.link_token);
       } catch (err) {
         setStatus(err.message, 'error');
         submitBtn.disabled = false;

@@ -3,6 +3,7 @@
 from .config import MeshConfigError, load_config
 from .core import (
     AccountToken,
+    ExchangeDepositAddress,
     LinkToken,
     MeshAPIError,
     MeshError,
@@ -13,6 +14,7 @@ from .core import (
     create_sandbox_cex_token,
     create_sandbox_wallet_token,
     get_account_tokens_for_user,
+    get_exchange_deposit_address,
     get_networks,
     get_transfer_status,
     print_sandbox_instructions,
@@ -49,6 +51,7 @@ __all__ = [
     "create_sandbox_wallet_token",
     "get_transfer_status",
     "get_networks",
+    "get_exchange_deposit_address",
     "print_sandbox_instructions",
     "simulate_deposit",
     "get_account_tokens_for_user",
@@ -58,6 +61,7 @@ __all__ = [
     "LinkToken",
     "Network",
     "AccountToken",
+    "ExchangeDepositAddress",
     # Exceptions
     "MeshError",
     "MeshAPIError",

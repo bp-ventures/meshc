@@ -17,7 +17,14 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from meshc import create_sandbox_cex_token, create_sandbox_wallet_token, load_config
+from meshc import (
+    create_sandbox_cex_token,
+    create_sandbox_wallet_token,
+    create_link_token,
+    get_exchange_deposit_address,
+    load_config,
+    ToAddress,
+)
 
 logger = logging.getLogger("meshsbox")
 
@@ -236,3 +243,143 @@ def api_webhook(request):
         logger.info("webhook: created tx=%s status=%s", transaction_id[:16], status)
 
     return JsonResponse({"status": "ok", "transaction_id": transaction_id})
+
+
+def withdraw(request):
+    """Render the withdraw form (wallet → exchange)."""
+    return render(request, 'meshsbox/withdraw.html')
+
+
+# Network IDs for withdraw flow
+ETHEREUM_MAINNET_NETWORK_ID = "e3c7fdd8-b1fc-4e51-85ae-bb276e075611"
+STELLAR_NETWORK_ID = "06855704-43d2-4ad2-a73c-372f0c3534e1"
+
+# Map symbols to network IDs
+SYMBOL_NETWORK_MAP = {
+    "ETH": ETHEREUM_MAINNET_NETWORK_ID,
+    "USDC": ETHEREUM_MAINNET_NETWORK_ID,  # Ethereum USDC
+    "XLM": STELLAR_NETWORK_ID,
+}
+
+
+@require_POST
+def api_withdraw_token(request):
+    """Generate link token for wallet-to-exchange withdrawal.
+
+    POST /meshc/api/withdraw-token/
+    {
+        "user_id": "GBXY...",       # Required: user identifier (to look up stored token)
+        "exchange": "coinbase",      # Required: exchange type
+        "symbol": "ETH",             # Required: token symbol
+        "amount": 0.1                # Optional: transfer amount
+    }
+
+    Flow:
+    1. Look up stored authToken from previous deposit (IntegrationToken model)
+    2. Fetch user's exchange deposit address via Mesh API
+    3. Create link token with toAddresses = exchange deposit address
+    4. Return link token to open Mesh Link UI (user connects wallet)
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    user_id = data.get('user_id')
+    exchange = data.get('exchange')
+    symbol = data.get('symbol')
+    amount = data.get('amount')
+
+    if not user_id:
+        return JsonResponse({'error': 'user_id is required'}, status=400)
+    if not exchange:
+        return JsonResponse({'error': 'exchange is required'}, status=400)
+    if not symbol:
+        return JsonResponse({'error': 'symbol is required'}, status=400)
+
+    # Map exchange names to Mesh API types
+    exchange_type_map = {
+        'coinbase': 'coinbase',
+        'binanceInternational': 'binanceInternational',
+        'binance': 'binanceInternational',
+    }
+    exchange_type = exchange_type_map.get(exchange, exchange)
+
+    # Get network ID for the symbol
+    network_id = SYMBOL_NETWORK_MAP.get(symbol.upper())
+    if not network_id:
+        return JsonResponse({'error': f'Unsupported symbol: {symbol}'}, status=400)
+
+    # Look up stored auth token from previous deposit
+    from .models import IntegrationToken
+
+    # Try to find token for this user + exchange combination
+    # Integration type in DB is stored as display name (e.g., "Coinbase", "Binance")
+    exchange_display_names = {
+        'coinbase': 'Coinbase',
+        'binanceInternational': 'Binance',
+    }
+    integration_type = exchange_display_names.get(exchange_type, exchange_type.title())
+
+    try:
+        stored_token = IntegrationToken.objects.filter(
+            user_id=user_id,
+            integration_type__iexact=integration_type,
+            status='active'
+        ).first()
+    except Exception as e:
+        logger.error("withdraw: failed to query IntegrationToken: %s", e)
+        return JsonResponse({'error': 'Database error'}, status=500)
+
+    if not stored_token:
+        return JsonResponse({
+            'error': f'No stored {integration_type} connection found. Please complete a deposit with "Easy Relogin" enabled first.'
+        }, status=400)
+
+    config = load_config()
+
+    try:
+        # Step 1: Get user's exchange deposit address
+        deposit_addr = get_exchange_deposit_address(
+            client_id=config['client_id'],
+            client_secret=config['client_secret'],
+            auth_token=stored_token.token_id,
+            symbol=symbol,
+            network_id=network_id,
+            exchange_type=exchange_type,
+            api_url=config['api_url'],
+        )
+
+        logger.info("withdraw: got deposit address=%s for %s on %s", deposit_addr.address[:16], symbol, exchange_type)
+
+        # Step 2: Create link token with toAddresses = exchange deposit address
+        to_address = ToAddress(
+            symbol=symbol,
+            address=deposit_addr.address,
+            network_id=network_id,
+            amount=amount,
+        )
+
+        result = create_link_token(
+            client_id=config['client_id'],
+            client_secret=config['client_secret'],
+            user_id=user_id,
+            to_addresses=[to_address],
+            transfer_type='deposit',  # User is "depositing" to their exchange
+            api_url=config['api_url'],
+        )
+
+        return JsonResponse({
+            'link_token': result.token,
+            'deposit_address': deposit_addr.address,
+            'chain': deposit_addr.chain,
+            'expires_at': result.expires_at,
+        })
+
+    except Exception as e:
+        logger.error("withdraw: failed to create token: %s", e)
+        error_msg = str(e)
+        # Provide more helpful error messages
+        if 'authToken' in error_msg.lower() or 'auth' in error_msg.lower():
+            error_msg = 'Your exchange connection has expired. Please reconnect via a new deposit.'
+        return JsonResponse({'error': error_msg}, status=500)

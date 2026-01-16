@@ -179,6 +179,20 @@ class AccountToken:
         }
 
 
+@dataclass
+class ExchangeDepositAddress:
+    """Exchange deposit address for withdrawals (wallet → exchange).
+
+    Represents the destination address on an exchange where users can
+    send crypto from their personal wallet.
+    """
+
+    symbol: str  # Token symbol (e.g., "ETH", "USDC")
+    address: str  # Deposit address on the exchange
+    chain: str  # Network/chain name (e.g., "ETH", "DOGE")
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
 # -----------------------------------------------------------------------------
 # HTTP Client
 # -----------------------------------------------------------------------------
@@ -478,6 +492,78 @@ def get_stellar_network_id(
         if net.name.lower() == "stellar":
             return net.id
     raise MeshAPIError("Stellar network not found")
+
+
+def get_exchange_deposit_address(
+    client_id: str,
+    client_secret: str,
+    auth_token: str,
+    symbol: str,
+    network_id: str,
+    exchange_type: str,
+    *,
+    api_url: str = SANDBOX_API_URL,
+) -> ExchangeDepositAddress:
+    """Fetch a user's exchange deposit address for withdrawals.
+
+    This enables the Wallet → Exchange flow where users transfer crypto
+    from their personal wallet to their exchange account.
+
+    Requires a stored auth_token from a previous deposit flow where the
+    user connected their exchange account.
+
+    Args:
+        client_id: Mesh API client ID
+        client_secret: Mesh API client secret
+        auth_token: User's stored exchange auth token (from previous deposit)
+        symbol: Token symbol (e.g., "ETH", "USDC", "DOGE")
+        network_id: Mesh network UUID
+        exchange_type: Exchange identifier ("coinbase", "binanceInternational")
+        api_url: Mesh API URL
+
+    Returns:
+        ExchangeDepositAddress with the user's deposit address on the exchange
+
+    Raises:
+        MeshAPIError: If the API call fails or token is invalid
+
+    Example:
+        >>> addr = get_exchange_deposit_address(
+        ...     client_id="...", client_secret="...",
+        ...     auth_token="stored_token_from_deposit",
+        ...     symbol="ETH",
+        ...     network_id="e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
+        ...     exchange_type="coinbase"
+        ... )
+        >>> print(addr.address)  # "0x1234..."
+    """
+    url = f"{api_url.rstrip('/')}/api/v1/transfers/managed/address/get"
+
+    payload = {
+        "symbol": symbol,
+        "networkId": network_id,
+        "authToken": auth_token,
+        "type": exchange_type,
+    }
+
+    logger.info("fetching exchange deposit address for %s on %s", symbol, exchange_type)
+    logger.debug("network_id=%s", network_id)
+
+    data = _request("POST", url, client_id, client_secret, json=payload)
+    content = data.get("content", {})
+
+    if not content.get("address"):
+        raise MeshAPIError(
+            f"No deposit address returned for {symbol} on {exchange_type}",
+            response=data,
+        )
+
+    return ExchangeDepositAddress(
+        symbol=content.get("symbol", symbol),
+        address=content["address"],
+        chain=content.get("chain", ""),
+        raw=content,
+    )
 
 
 # -----------------------------------------------------------------------------
