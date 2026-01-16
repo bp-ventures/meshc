@@ -510,11 +510,17 @@
             onIntegrationConnected: async (p) => {
               console.log('=== onIntegrationConnected ===');
               console.log('brokerName:', p.brokerName);
+              console.log('brokerType:', p.brokerType);  // API type identifier
+              console.log('type:', p.type);  // Alternative field name
               console.log('Full payload:', JSON.stringify(p, null, 2));
               setStatus(`Connected to ${p.brokerName}! Preparing transfer...`, 'success');
 
               // Extract and save token if Easy Relogin enabled
               const tokenId = extractToken(p);
+              // Use brokerType (API identifier) if available, fallback to brokerName
+              const actualBrokerType = p.brokerType || p.type || p.brokerName;
+              console.log('Using broker type for API:', actualBrokerType);
+
               if (tokenId && easyRelogin) {
                 await saveToken(tokenId, p.brokerName, userId);
               }
@@ -522,13 +528,21 @@
               // Now get the wallet transfer link token with the fresh auth token
               if (tokenId) {
                 try {
+                  // Override exchange with actual broker type from callback
+                  const transferPayload = {
+                    ...payload,
+                    exchange: actualBrokerType,  // Use actual type from Mesh callback
+                    auth_token: tokenId,
+                  };
+                  console.log('Transfer request payload:', transferPayload);
+
                   const transferResp = await fetch('/meshc/api/withdraw-token/', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
                       'X-CSRFToken': csrfToken,
                     },
-                    body: JSON.stringify({ ...payload, auth_token: tokenId }),
+                    body: JSON.stringify(transferPayload),
                   });
 
                   const transferData = await transferResp.json();
