@@ -250,24 +250,24 @@ def withdraw(request):
     return render(request, 'meshsbox/withdraw.html')
 
 
-# Network IDs for withdraw flow
-ETHEREUM_MAINNET_NETWORK_ID = "e3c7fdd8-b1fc-4e51-85ae-bb276e075611"
+# Network IDs for withdraw flow (from meshc/config.py)
+SEPOLIA_NETWORK_ID = "03b2d786-7092-4a6a-9737-d6013e21819b"  # Ethereum Sepolia testnet
 STELLAR_NETWORK_ID = "06855704-43d2-4ad2-a73c-372f0c3534e1"
 
-# Map symbols to network IDs
+# Map symbols to network IDs (matches deposit template)
 SYMBOL_NETWORK_MAP = {
-    "ETH": ETHEREUM_MAINNET_NETWORK_ID,
-    "USDC": ETHEREUM_MAINNET_NETWORK_ID,  # Ethereum USDC
     "XLM": STELLAR_NETWORK_ID,
+    "USDC": STELLAR_NETWORK_ID,
+    "SEPOLIAETH": SEPOLIA_NETWORK_ID,
 }
 
 # Standard test addresses (used throughout codebase for sandbox testing)
 DEFAULT_STELLAR_ADDRESS = "GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX"
-DEFAULT_ETHEREUM_ADDRESS = "0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c"
+DEFAULT_SEPOLIA_ADDRESS = "0xF4c2AFcbE0c52FA4482AE618CEF5aBe4e5E5388c"
 
 # Map network IDs to default test addresses
 PLACEHOLDER_ADDRESSES = {
-    ETHEREUM_MAINNET_NETWORK_ID: DEFAULT_ETHEREUM_ADDRESS,
+    SEPOLIA_NETWORK_ID: DEFAULT_SEPOLIA_ADDRESS,
     STELLAR_NETWORK_ID: DEFAULT_STELLAR_ADDRESS,
 }
 
