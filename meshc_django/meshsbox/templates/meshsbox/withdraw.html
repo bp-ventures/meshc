@@ -193,6 +193,32 @@
       box-shadow: none;
     }
 
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      margin-bottom: 1.5rem;
+      padding: 0.75rem 1rem;
+      background: #fdf2f8;
+      border-radius: 10px;
+      border: 1px solid #fbcfe8;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #ec4899;
+      cursor: pointer;
+    }
+
+    .checkbox-row label {
+      margin: 0;
+      font-weight: 400;
+      font-size: 0.85rem;
+      color: #9d174d;
+      cursor: pointer;
+    }
+
     .submit-btn {
       width: 100%;
       padding: 1rem;
@@ -253,21 +279,6 @@
       font-family: 'SF Mono', Monaco, monospace;
       max-height: 300px;
     }
-
-    .info-box {
-      background: #fef3c7;
-      border: 1px solid #fcd34d;
-      border-radius: 10px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1.5rem;
-      font-size: 0.85rem;
-      color: #92400e;
-    }
-
-    .info-box strong {
-      display: block;
-      margin-bottom: 0.25rem;
-    }
   </style>
 </head>
 <body>
@@ -284,11 +295,6 @@
       <h1>Withdraw to Exchange</h1>
     </div>
     <p class="subtitle">Transfer from your wallet to your exchange account</p>
-
-    <div class="info-box">
-      <strong>Prerequisite:</strong>
-      You must complete a deposit with "Easy Relogin" enabled first. This stores your exchange connection.
-    </div>
 
     <form id="withdraw-form">
       <label>Your User ID</label>
@@ -322,6 +328,11 @@
       <label>Amount (optional)</label>
       <div class="input-wrapper">
         <input type="number" name="amount" step="0.01" placeholder="0.1">
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" name="easy_relogin" id="easy_relogin" checked>
+        <label for="easy_relogin">Easy Relogin (save exchange connection)</label>
       </div>
 
       <button type="submit" class="submit-btn" id="submit-btn">Withdraw to Exchange</button>
@@ -412,20 +423,59 @@
       statusEl.style.display = 'block';
     }
 
+    // Save token to backend for Easy Relogin
+    async function saveToken(tokenId, brokerName, userId) {
+      try {
+        const saveResp = await fetch('/meshc/api/save-token/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+          },
+          body: JSON.stringify({
+            token_id: tokenId,
+            integration_type: brokerName,
+            user_id: userId,
+          }),
+        });
+        console.log('Easy Relogin: token saved!', await saveResp.json());
+        return true;
+      } catch (saveErr) {
+        console.warn('Easy Relogin: failed to save token', saveErr);
+        return false;
+      }
+    }
+
+    // Extract token from Mesh callback payload
+    function extractToken(payload) {
+      if (payload.accessToken?.accountTokens?.[0]?.accessToken) {
+        return payload.accessToken.accountTokens[0].accessToken;
+      } else if (payload.accessToken?.accessToken) {
+        return payload.accessToken.accessToken;
+      } else if (payload.accountTokens?.[0]?.accessToken) {
+        return payload.accountTokens[0].accessToken;
+      } else if (payload.tokenId) {
+        return payload.tokenId;
+      }
+      return null;
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       submitBtn.disabled = true;
-      setStatus('Fetching exchange deposit address...', 'loading');
+      setStatus('Checking exchange connection...', 'loading');
 
       const fd = new FormData(form);
-      const payload = {
-        user_id: fd.get('user_id'),
-        exchange: fd.get('exchange'),
-        symbol: fd.get('symbol'),
-        amount: fd.get('amount') ? parseFloat(fd.get('amount')) : null,
-      };
+      const userId = fd.get('user_id');
+      const exchange = fd.get('exchange');
+      const symbol = fd.get('symbol');
+      const amount = fd.get('amount') ? parseFloat(fd.get('amount')) : null;
+      const easyRelogin = fd.get('easy_relogin') === 'on';
+
+      const payload = { user_id: userId, exchange, symbol, amount };
 
       try {
+        // Step 1: Check if we have a stored token or need to auth
         const resp = await fetch('/meshc/api/withdraw-token/', {
           method: 'POST',
           headers: {
@@ -437,40 +487,121 @@
 
         const data = await resp.json();
 
-        if (!resp.ok) {
-          throw new Error(data.error || 'API error');
+        // If we got a link token directly, proceed to wallet transfer
+        if (data.link_token && !data.needs_auth) {
+          await openWalletTransfer(data.link_token, data.deposit_address);
+          return;
         }
 
-        setStatus('Opening Mesh Link...', 'loading');
+        // If we need to authenticate with exchange first
+        if (data.needs_auth) {
+          setStatus(`Connecting to ${data.integration_type}...`, 'loading');
+          console.log('Need to authenticate with exchange first');
 
-        const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
+          // Get auth link token
+          const authResp = await fetch('/meshc/api/withdraw-token/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({ ...payload, mode: 'auth' }),
+          });
 
-        const link = createLink({
-          clientId: 'meshc-django',
-          onIntegrationConnected: (p) => setStatus(`Connected wallet: ${p.brokerName}`, 'success'),
-          onTransferFinished: async (p) => {
-            setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
-            resultJson.textContent = JSON.stringify(p, null, 2);
-            resultsEl.style.display = 'block';
-            console.log('onTransferFinished payload:', JSON.stringify(p, null, 2));
-          },
-          onExit: (err) => {
-            submitBtn.disabled = false;
-            if (err) setStatus(`Error: ${err}`, 'error');
-          },
-        });
+          const authData = await authResp.json();
+          if (!authData.link_token) {
+            throw new Error(authData.error || 'Failed to get auth token');
+          }
 
-        // Show deposit address info
-        if (data.deposit_address) {
-          console.log('Deposit address:', data.deposit_address);
+          // Open Mesh Link for exchange authentication
+          const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
+
+          const authLink = createLink({
+            clientId: 'meshc-django',
+            onIntegrationConnected: async (p) => {
+              console.log('Exchange connected:', p.brokerName);
+              setStatus(`Connected to ${p.brokerName}! Preparing transfer...`, 'success');
+
+              // Extract and save token if Easy Relogin enabled
+              const tokenId = extractToken(p);
+              if (tokenId && easyRelogin) {
+                await saveToken(tokenId, p.brokerName, userId);
+              }
+
+              // Now get the wallet transfer link token with the fresh auth token
+              if (tokenId) {
+                try {
+                  const transferResp = await fetch('/meshc/api/withdraw-token/', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({ ...payload, auth_token: tokenId }),
+                  });
+
+                  const transferData = await transferResp.json();
+                  if (transferData.link_token) {
+                    // Small delay to let the auth modal close
+                    setTimeout(() => {
+                      openWalletTransfer(transferData.link_token, transferData.deposit_address);
+                    }, 500);
+                  } else {
+                    throw new Error(transferData.error || 'Failed to get transfer token');
+                  }
+                } catch (err) {
+                  setStatus(err.message, 'error');
+                  submitBtn.disabled = false;
+                }
+              }
+            },
+            onExit: (err) => {
+              if (err) {
+                setStatus(`Error: ${err}`, 'error');
+                submitBtn.disabled = false;
+              }
+            },
+          });
+
+          authLink.openLink(authData.link_token);
+          return;
         }
 
-        link.openLink(data.link_token);
+        // Handle errors
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
       } catch (err) {
         setStatus(err.message, 'error');
         submitBtn.disabled = false;
       }
     });
+
+    // Open Mesh Link for wallet transfer
+    async function openWalletTransfer(linkToken, depositAddress) {
+      setStatus('Opening wallet connection...', 'loading');
+      console.log('Deposit address:', depositAddress);
+
+      const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
+
+      const link = createLink({
+        clientId: 'meshc-django',
+        onIntegrationConnected: (p) => setStatus(`Connected wallet: ${p.brokerName}`, 'success'),
+        onTransferFinished: async (p) => {
+          setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
+          resultJson.textContent = JSON.stringify(p, null, 2);
+          resultsEl.style.display = 'block';
+          console.log('onTransferFinished payload:', JSON.stringify(p, null, 2));
+        },
+        onExit: (err) => {
+          submitBtn.disabled = false;
+          if (err) setStatus(`Error: ${err}`, 'error');
+        },
+      });
+
+      link.openLink(linkToken);
+    }
   </script>
 </body>
 </html>

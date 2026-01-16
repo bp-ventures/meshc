@@ -22,49 +22,43 @@ The withdraw template enables **Wallet → Exchange** transfers using the Mesh S
 
 ## Architecture
 
+The withdraw flow is **self-contained** - no prior deposit required. If no stored token exists, the user authenticates with their exchange on-demand.
+
+### Flow with Stored Token (Fast Path)
 ```
-User loads /meshc/withdraw/
+User submits form → API finds stored token → Fetch deposit address → Open wallet transfer
+```
+
+### Flow without Stored Token (Auth Required)
+```
+User submits form
          ↓
-Browser renders withdraw form (withdraw.html)
+API returns {needs_auth: true}
          ↓
-User fills form (user_id, exchange, symbol, amount)
+JS requests auth link token (mode: "auth")
          ↓
-User clicks "Withdraw to Exchange"
+User connects to exchange in Mesh Link
          ↓
-JS submits to POST /meshc/api/withdraw-token/
+onIntegrationConnected fires with auth token
          ↓
-View looks up stored IntegrationToken (from previous deposit)
+JS saves token if "Easy Relogin" checked
          ↓
-View calls get_exchange_deposit_address() → fetches user's exchange deposit address
+JS requests transfer link token with fresh auth_token
          ↓
-View calls create_link_token() with toAddresses = exchange deposit address
+API fetches deposit address, creates wallet link token
          ↓
-View returns {link_token, deposit_address, chain, expires_at}
-         ↓
-JS imports @meshconnect/web-link-sdk
-         ↓
-JS calls link.openLink(link_token)
-         ↓
-Mesh modal opens (user connects wallet: MetaMask, Rainbow, etc.)
-         ↓
-User confirms transfer from wallet to exchange
-         ↓
-SDK fires onTransferFinished(result)
-         ↓
-JS displays result JSON
+User connects wallet, confirms transfer
 ```
 
 ---
 
-## Prerequisite: Stored Auth Token
+## Easy Relogin
 
-The withdraw flow **requires** that the user has previously completed a deposit with "Easy Relogin" enabled. This stores their `IntegrationToken` in the database:
+Like the deposit flow, withdraw has an "Easy Relogin" checkbox:
+- **Checked (default)**: Saves exchange connection for faster future withdrawals
+- **Unchecked**: Token not saved, user must re-authenticate each time
 
-- `token_id`: The Mesh auth token for their exchange connection
-- `integration_type`: "Coinbase", "Binance", etc.
-- `user_id`: Their identifier (Stellar/Ethereum address)
-
-If no stored token exists, the API returns an error prompting the user to complete a deposit first.
+The token is saved via `POST /meshc/api/save-token/` after successful exchange authentication.
 
 ---
 
@@ -72,17 +66,28 @@ If no stored token exists, the API returns an error prompting the user to comple
 
 ### `POST /meshc/api/withdraw-token/`
 
-**Request:**
+**Request (transfer mode - default):**
 ```json
 {
   "user_id": "GBXYIBA4JX4BMI...",
   "exchange": "coinbase",
   "symbol": "ETH",
-  "amount": 0.1
+  "amount": 0.1,
+  "auth_token": "optional_fresh_token"
 }
 ```
 
-**Response (success):**
+**Request (auth mode):**
+```json
+{
+  "user_id": "GBXYIBA4JX4BMI...",
+  "exchange": "coinbase",
+  "symbol": "ETH",
+  "mode": "auth"
+}
+```
+
+**Response (success - transfer mode):**
 ```json
 {
   "link_token": "mesh_link_...",
@@ -92,10 +97,21 @@ If no stored token exists, the API returns an error prompting the user to comple
 }
 ```
 
-**Response (no stored token):**
+**Response (success - auth mode):**
 ```json
 {
-  "error": "No stored Coinbase connection found. Please complete a deposit with \"Easy Relogin\" enabled first."
+  "link_token": "mesh_link_...",
+  "mode": "auth",
+  "expires_at": "2026-01-16T..."
+}
+```
+
+**Response (needs authentication):**
+```json
+{
+  "needs_auth": true,
+  "exchange": "coinbase",
+  "integration_type": "Coinbase"
 }
 ```
 

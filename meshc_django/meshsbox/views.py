@@ -268,17 +268,20 @@ def api_withdraw_token(request):
 
     POST /meshc/api/withdraw-token/
     {
-        "user_id": "GBXY...",       # Required: user identifier (to look up stored token)
+        "user_id": "GBXY...",       # Required: user identifier
         "exchange": "coinbase",      # Required: exchange type
         "symbol": "ETH",             # Required: token symbol
-        "amount": 0.1                # Optional: transfer amount
+        "amount": 0.1,               # Optional: transfer amount
+        "auth_token": "...",         # Optional: fresh token from exchange auth
+        "mode": "transfer"           # Optional: "transfer" (default) or "auth"
     }
 
-    Flow:
-    1. Look up stored authToken from previous deposit (IntegrationToken model)
-    2. Fetch user's exchange deposit address via Mesh API
-    3. Create link token with toAddresses = exchange deposit address
-    4. Return link token to open Mesh Link UI (user connects wallet)
+    Modes:
+    - "transfer" (default): Create wallet link token for transfer
+      - Uses stored token or auth_token from request
+      - Returns {link_token, deposit_address, ...} or {needs_auth: true}
+    - "auth": Create link token for exchange authentication only
+      - Returns {link_token} for exchange connection
     """
     try:
         data = json.loads(request.body)
@@ -289,6 +292,8 @@ def api_withdraw_token(request):
     exchange = data.get('exchange')
     symbol = data.get('symbol')
     amount = data.get('amount')
+    mode = data.get('mode', 'transfer')
+    fresh_auth_token = data.get('auth_token')  # Token from recent exchange auth
 
     if not user_id:
         return JsonResponse({'error': 'user_id is required'}, status=400)
@@ -310,40 +315,72 @@ def api_withdraw_token(request):
     if not network_id:
         return JsonResponse({'error': f'Unsupported symbol: {symbol}'}, status=400)
 
-    # Look up stored auth token from previous deposit
-    from .models import IntegrationToken
-
-    # Try to find token for this user + exchange combination
-    # Integration type in DB is stored as display name (e.g., "Coinbase", "Binance")
+    # Exchange display names for DB lookup
     exchange_display_names = {
         'coinbase': 'Coinbase',
         'binanceInternational': 'Binance',
     }
     integration_type = exchange_display_names.get(exchange_type, exchange_type.title())
 
-    try:
-        stored_token = IntegrationToken.objects.filter(
-            user_id=user_id,
-            integration_type__iexact=integration_type,
-            status='active'
-        ).first()
-    except Exception as e:
-        logger.error("withdraw: failed to query IntegrationToken: %s", e)
-        return JsonResponse({'error': 'Database error'}, status=500)
-
-    if not stored_token:
-        return JsonResponse({
-            'error': f'No stored {integration_type} connection found. Please complete a deposit with "Easy Relogin" enabled first.'
-        }, status=400)
-
     config = load_config()
+
+    # Mode: "auth" - Create link token for exchange authentication only
+    if mode == 'auth':
+        try:
+            # Create a link token without transfer options - just for auth
+            # Using a minimal toAddress that won't trigger a transfer
+            result = create_link_token(
+                client_id=config['client_id'],
+                client_secret=config['client_secret'],
+                user_id=user_id,
+                to_addresses=[ToAddress(symbol=symbol, address="auth_placeholder", network_id=network_id)],
+                transfer_type='deposit',
+                api_url=config['api_url'],
+            )
+            logger.info("withdraw: created auth link token for %s on %s", user_id[:12], exchange_type)
+            return JsonResponse({
+                'link_token': result.token,
+                'mode': 'auth',
+                'expires_at': result.expires_at,
+            })
+        except Exception as e:
+            logger.error("withdraw: failed to create auth token: %s", e)
+            return JsonResponse({'error': str(e)}, status=500)
+
+    # Mode: "transfer" - Create wallet link token for actual transfer
+    # First, determine which auth token to use
+    auth_token = fresh_auth_token  # Prefer fresh token from request
+
+    if not auth_token:
+        # Look up stored token from previous auth
+        from .models import IntegrationToken
+        try:
+            stored_token = IntegrationToken.objects.filter(
+                user_id=user_id,
+                integration_type__iexact=integration_type,
+                status='active'
+            ).first()
+            if stored_token:
+                auth_token = stored_token.token_id
+        except Exception as e:
+            logger.error("withdraw: failed to query IntegrationToken: %s", e)
+            return JsonResponse({'error': 'Database error'}, status=500)
+
+    # If no auth token available, tell frontend to do exchange auth first
+    if not auth_token:
+        logger.info("withdraw: no auth token for %s on %s, needs_auth=true", user_id[:12], exchange_type)
+        return JsonResponse({
+            'needs_auth': True,
+            'exchange': exchange,
+            'integration_type': integration_type,
+        })
 
     try:
         # Step 1: Get user's exchange deposit address
         deposit_addr = get_exchange_deposit_address(
             client_id=config['client_id'],
             client_secret=config['client_secret'],
-            auth_token=stored_token.token_id,
+            auth_token=auth_token,
             symbol=symbol,
             network_id=network_id,
             exchange_type=exchange_type,
@@ -379,7 +416,12 @@ def api_withdraw_token(request):
     except Exception as e:
         logger.error("withdraw: failed to create token: %s", e)
         error_msg = str(e)
-        # Provide more helpful error messages
-        if 'authToken' in error_msg.lower() or 'auth' in error_msg.lower():
-            error_msg = 'Your exchange connection has expired. Please reconnect via a new deposit.'
+        # If auth token is invalid/expired, tell frontend to re-auth
+        if 'authToken' in error_msg.lower() or 'auth' in error_msg.lower() or 'unauthorized' in error_msg.lower():
+            return JsonResponse({
+                'needs_auth': True,
+                'exchange': exchange,
+                'integration_type': integration_type,
+                'reason': 'token_expired',
+            })
         return JsonResponse({'error': error_msg}, status=500)
