@@ -261,6 +261,12 @@ SYMBOL_NETWORK_MAP = {
     "XLM": STELLAR_NETWORK_ID,
 }
 
+# Valid placeholder addresses for auth-only link tokens (must match network pattern)
+PLACEHOLDER_ADDRESSES = {
+    ETHEREUM_MAINNET_NETWORK_ID: "0x0000000000000000000000000000000000000000",
+    STELLAR_NETWORK_ID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+}
+
 
 @require_POST
 def api_withdraw_token(request):
@@ -327,13 +333,13 @@ def api_withdraw_token(request):
     # Mode: "auth" - Create link token for exchange authentication only
     if mode == 'auth':
         try:
-            # Create a link token without transfer options - just for auth
-            # Using a minimal toAddress that won't trigger a transfer
+            # Use a valid placeholder address that matches the network pattern
+            placeholder_addr = PLACEHOLDER_ADDRESSES.get(network_id, "0x0000000000000000000000000000000000000000")
             result = create_link_token(
                 client_id=config['client_id'],
                 client_secret=config['client_secret'],
                 user_id=user_id,
-                to_addresses=[ToAddress(symbol=symbol, address="auth_placeholder", network_id=network_id)],
+                to_addresses=[ToAddress(symbol=symbol, address=placeholder_addr, network_id=network_id)],
                 transfer_type='deposit',
                 api_url=config['api_url'],
             )
