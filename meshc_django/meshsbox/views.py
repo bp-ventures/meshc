@@ -399,10 +399,77 @@ def api_withdraw_token(request):
             'integration_type': integration_type,
         })
 
+    # Has auth token - return it for use with api_deposit_token
+    logger.info("withdraw: found auth token, returning for deposit address fetch")
+    return JsonResponse({
+        'has_token': True,
+        'auth_token': auth_token,
+        'exchange': exchange,
+        'integration_type': integration_type,
+    })
+
+
+@require_POST
+def api_deposit_token(request):
+    """Fetch exchange deposit address and create wallet transfer token.
+
+    POST /meshc/api/deposit-token/
+    {
+        "user_id": "GBXY...",       # Required: user identifier
+        "exchange": "coinbase",      # Required: exchange type
+        "symbol": "ETH",             # Required: token symbol
+        "amount": 0.1,               # Optional: transfer amount
+        "auth_token": "..."          # Required: exchange auth token
+    }
+
+    Returns: {link_token, deposit_address, chain, expires_at}
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        logger.warning("deposit-token: invalid JSON")
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    user_id = data.get('user_id')
+    exchange = data.get('exchange')
+    symbol = data.get('symbol')
+    amount = data.get('amount')
+    auth_token = data.get('auth_token')
+
+    logger.info("deposit-token: request user=%s exchange=%s symbol=%s has_auth=%s",
+                user_id[:12] if user_id else None, exchange, symbol, bool(auth_token))
+
+    if not user_id:
+        return JsonResponse({'error': 'user_id is required'}, status=400)
+    if not exchange:
+        return JsonResponse({'error': 'exchange is required'}, status=400)
+    if not symbol:
+        return JsonResponse({'error': 'symbol is required'}, status=400)
+    if not auth_token:
+        return JsonResponse({'error': 'auth_token is required'}, status=400)
+
+    # Map exchange names to Mesh API types
+    # Note: Mesh returns 'binanceInternationalDirect' in callbacks
+    exchange_type_map = {
+        'coinbase': 'coinbase',
+        'binanceInternational': 'binanceInternational',
+        'binanceInternationalDirect': 'binanceInternational',
+        'binance': 'binanceInternational',
+        'Binance': 'binanceInternational',
+    }
+    exchange_type = exchange_type_map.get(exchange, exchange)
+
+    # Get network ID for the symbol
+    network_id = SYMBOL_NETWORK_MAP.get(symbol.upper())
+    if not network_id:
+        return JsonResponse({'error': f'Unsupported symbol: {symbol}'}, status=400)
+
+    config = load_config()
+
     try:
         # Step 1: Get user's exchange deposit address
-        logger.info("withdraw: fetching deposit addr symbol=%s network=%s exchange=%s token_source=%s token_prefix=%s",
-                    symbol, network_id[:12], exchange_type, token_source, auth_token[:20] if auth_token else None)
+        logger.info("deposit-token: fetching addr symbol=%s network=%s exchange=%s token_prefix=%s",
+                    symbol, network_id[:12], exchange_type, auth_token[:20] if auth_token else None)
 
         deposit_addr = get_exchange_deposit_address(
             client_id=config['client_id'],
@@ -414,7 +481,7 @@ def api_withdraw_token(request):
             api_url=config['api_url'],
         )
 
-        logger.info("withdraw: got deposit address=%s chain=%s for %s on %s",
+        logger.info("deposit-token: got address=%s chain=%s for %s on %s",
                     deposit_addr.address[:16], deposit_addr.chain, symbol, exchange_type)
 
         # Step 2: Create link token with toAddresses = exchange deposit address
@@ -434,7 +501,7 @@ def api_withdraw_token(request):
             api_url=config['api_url'],
         )
 
-        logger.info("withdraw: created transfer token for %s to %s", user_id[:12], deposit_addr.address[:16])
+        logger.info("deposit-token: created transfer token for %s to %s", user_id[:12], deposit_addr.address[:16])
         return JsonResponse({
             'link_token': result.token,
             'deposit_address': deposit_addr.address,
@@ -444,15 +511,5 @@ def api_withdraw_token(request):
 
     except Exception as e:
         error_msg = str(e)
-        logger.error("withdraw: failed symbol=%s exchange=%s token_source=%s error=%s", symbol, exchange_type, token_source, error_msg)
-
-        # If auth token is invalid/expired, tell frontend to re-auth
-        if 'authToken' in error_msg.lower() or 'auth' in error_msg.lower() or 'unauthorized' in error_msg.lower() or 'invalid' in error_msg.lower():
-            logger.info("withdraw: token invalid, returning needs_auth=true reason=token_expired")
-            return JsonResponse({
-                'needs_auth': True,
-                'exchange': exchange,
-                'integration_type': integration_type,
-                'reason': 'token_expired',
-            })
+        logger.error("deposit-token: failed symbol=%s exchange=%s error=%s", symbol, exchange_type, error_msg)
         return JsonResponse({'error': error_msg}, status=500)

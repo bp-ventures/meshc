@@ -281,15 +281,8 @@ class ApiWithdrawTokenTests(TestCase):
         self.assertEqual(data['link_token'], 'auth-link-token')
         self.assertEqual(data['mode'], 'auth')
 
-    @patch('meshsbox.views.create_link_token')
-    @patch('meshsbox.views.get_exchange_deposit_address')
-    @patch('meshsbox.views.load_config')
-    def test_transfer_mode_with_fresh_auth_token(self, mock_config, mock_get_addr, mock_create):
-        """Transfer mode with fresh auth_token returns link token and deposit address."""
-        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
-        mock_get_addr.return_value = MagicMock(address='0x1234abcd', chain='ETH')
-        mock_create.return_value = MagicMock(token='transfer-link-token', expires_at='2025-01-01')
-
+    def test_transfer_mode_with_fresh_auth_token(self):
+        """Transfer mode with fresh auth_token returns has_token for deposit-token call."""
         response = self.client.post('/meshc/api/withdraw-token/',
             data=json.dumps({
                 'user_id': 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
@@ -301,19 +294,13 @@ class ApiWithdrawTokenTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['link_token'], 'transfer-link-token')
-        self.assertEqual(data['deposit_address'], '0x1234abcd')
-        self.assertEqual(data['chain'], 'ETH')
+        # api_withdraw_token now returns has_token + auth_token for frontend to use with api_deposit_token
+        self.assertTrue(data['has_token'])
+        self.assertEqual(data['auth_token'], 'fresh-auth-token')
+        self.assertEqual(data['exchange'], 'coinbase')
 
-    @patch('meshsbox.views.create_link_token')
-    @patch('meshsbox.views.get_exchange_deposit_address')
-    @patch('meshsbox.views.load_config')
-    def test_transfer_mode_with_stored_token(self, mock_config, mock_get_addr, mock_create):
-        """Transfer mode uses stored token from database."""
-        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
-        mock_get_addr.return_value = MagicMock(address='GDEPOSIT...', chain='Stellar')
-        mock_create.return_value = MagicMock(token='stored-link-token', expires_at='2025-01-01')
-
+    def test_transfer_mode_with_stored_token(self):
+        """Transfer mode returns stored token from database."""
         # Create stored token
         from meshsbox.models import IntegrationToken
         IntegrationToken.objects.create(
@@ -333,41 +320,101 @@ class ApiWithdrawTokenTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['link_token'], 'stored-link-token')
+        # api_withdraw_token returns has_token + stored auth_token
+        self.assertTrue(data['has_token'])
+        self.assertEqual(data['auth_token'], 'stored-auth-token')
 
-        # Verify stored token was used
-        mock_get_addr.assert_called_once()
-        call_kwargs = mock_get_addr.call_args[1]
-        self.assertEqual(call_kwargs['auth_token'], 'stored-auth-token')
 
+class ApiDepositTokenTests(TestCase):
+    """Tests for the deposit token API endpoint (fetches deposit address and creates transfer token)."""
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_requires_post(self):
+        """API rejects GET requests."""
+        response = self.client.get('/meshc/api/deposit-token/')
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_json(self):
+        """API rejects non-JSON body."""
+        response = self.client.post('/meshc/api/deposit-token/', data='bad', content_type='text/plain')
+        self.assertEqual(response.status_code, 400)
+
+    def test_requires_auth_token(self):
+        """API requires auth_token field."""
+        response = self.client.post('/meshc/api/deposit-token/',
+            data=json.dumps({
+                'user_id': 'test',
+                'exchange': 'coinbase',
+                'symbol': 'USDC'
+            }),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('auth_token', response.json()['error'])
+
+    def test_rejects_unsupported_symbol(self):
+        """API rejects unsupported symbol."""
+        response = self.client.post('/meshc/api/deposit-token/',
+            data=json.dumps({
+                'user_id': 'test',
+                'exchange': 'coinbase',
+                'symbol': 'DOGE',
+                'auth_token': 'test-token'
+            }),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Unsupported symbol', response.json()['error'])
+
+    @patch('meshsbox.views.create_link_token')
     @patch('meshsbox.views.get_exchange_deposit_address')
     @patch('meshsbox.views.load_config')
-    def test_expired_token_returns_needs_auth(self, mock_config, mock_get_addr):
-        """Returns needs_auth when stored token is expired."""
+    def test_fetches_deposit_address_and_returns_link_token(self, mock_config, mock_get_addr, mock_create):
+        """API fetches deposit address and creates link token."""
         mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
-        mock_get_addr.side_effect = Exception('Invalid authToken')
+        mock_get_addr.return_value = MagicMock(address='0x1234abcd5678', chain='ETH')
+        mock_create.return_value = MagicMock(token='transfer-link-token', expires_at='2025-01-01')
 
-        # Create stored token
-        from meshsbox.models import IntegrationToken
-        IntegrationToken.objects.create(
-            token_id='expired-token',
-            integration_type='Coinbase',
-            user_id='GBXYTEST',
-            status='active',
-        )
-
-        response = self.client.post('/meshc/api/withdraw-token/',
+        response = self.client.post('/meshc/api/deposit-token/',
             data=json.dumps({
-                'user_id': 'GBXYTEST',
+                'user_id': 'GBXYIBA4JX4BMI4RGDI7XEKKTFIGM3AV5T7L7R2IN6L6QOWYDVKQA5NX',
                 'exchange': 'coinbase',
                 'symbol': 'USDC',
+                'auth_token': 'valid-auth-token'
             }),
             content_type='application/json')
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertTrue(data.get('needs_auth'))
-        self.assertEqual(data.get('reason'), 'token_expired')
+        self.assertEqual(data['link_token'], 'transfer-link-token')
+        self.assertEqual(data['deposit_address'], '0x1234abcd5678')
+        self.assertEqual(data['chain'], 'ETH')
+
+        # Verify correct API calls
+        mock_get_addr.assert_called_once()
+        call_kwargs = mock_get_addr.call_args[1]
+        self.assertEqual(call_kwargs['auth_token'], 'valid-auth-token')
+        self.assertEqual(call_kwargs['symbol'], 'USDC')
+
+    @patch('meshsbox.views.get_exchange_deposit_address')
+    @patch('meshsbox.views.load_config')
+    def test_invalid_auth_token_returns_error(self, mock_config, mock_get_addr):
+        """API returns error when auth token is invalid/expired."""
+        mock_config.return_value = {'client_id': 'x', 'client_secret': 'x', 'api_url': 'https://sandbox.test'}
+        mock_get_addr.side_effect = Exception('API error: Invalid authToken provided')
+
+        response = self.client.post('/meshc/api/deposit-token/',
+            data=json.dumps({
+                'user_id': 'test',
+                'exchange': 'coinbase',
+                'symbol': 'USDC',
+                'auth_token': 'expired-token'
+            }),
+            content_type='application/json')
+
+        self.assertEqual(response.status_code, 500)
+        data = response.json()
+        self.assertIn('Invalid authToken', data['error'])
 
 
 class ApiSaveTokenTests(TestCase):
