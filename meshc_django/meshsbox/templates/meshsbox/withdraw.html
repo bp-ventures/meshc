@@ -459,18 +459,24 @@
       let token = null;
       let source = 'none';
 
-      if (payload.accessToken?.accountTokens?.[0]?.accessToken) {
-        token = payload.accessToken.accountTokens[0].accessToken;
-        source = 'accessToken.accountTokens[0].accessToken';
-      } else if (payload.accessToken?.accessToken) {
-        token = payload.accessToken.accessToken;
-        source = 'accessToken.accessToken';
-      } else if (payload.accountTokens?.[0]?.accessToken) {
-        token = payload.accountTokens[0].accessToken;
-        source = 'accountTokens[0].accessToken';
+      // MMT format: accountTokens[].tokenId (per Mesh docs)
+      if (payload.accountTokens?.[0]?.tokenId) {
+        token = payload.accountTokens[0].tokenId;
+        source = 'accountTokens[0].tokenId (MMT)';
+      } else if (payload.accessToken?.accountTokens?.[0]?.tokenId) {
+        token = payload.accessToken.accountTokens[0].tokenId;
+        source = 'accessToken.accountTokens[0].tokenId';
       } else if (payload.tokenId) {
         token = payload.tokenId;
         source = 'tokenId';
+      }
+      // Legacy fallback: accessToken field (older SDK versions)
+      else if (payload.accountTokens?.[0]?.accessToken) {
+        token = payload.accountTokens[0].accessToken;
+        source = 'accountTokens[0].accessToken (legacy)';
+      } else if (payload.accessToken?.accessToken) {
+        token = payload.accessToken.accessToken;
+        source = 'accessToken.accessToken (legacy)';
       }
 
       console.log(`Token extracted from: ${source}`);

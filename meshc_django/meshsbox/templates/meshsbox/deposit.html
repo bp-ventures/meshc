@@ -427,19 +427,25 @@
                 let tokenId = null;
                 let brokerName = p.brokerName || 'Unknown';
 
-                if (p.accessToken?.accountTokens?.[0]?.accessToken) {
-                  tokenId = p.accessToken.accountTokens[0].accessToken;
+                // MMT format: accountTokens[].tokenId (per Mesh docs)
+                if (p.accountTokens?.[0]?.tokenId) {
+                  tokenId = p.accountTokens[0].tokenId;
+                  console.log('Found token in accountTokens[0].tokenId (MMT format)');
+                } else if (p.accessToken?.accountTokens?.[0]?.tokenId) {
+                  tokenId = p.accessToken.accountTokens[0].tokenId;
                   brokerName = p.accessToken.brokerName || brokerName;
-                  console.log('Found token in accessToken.accountTokens[0]');
-                } else if (p.accessToken?.accessToken) {
-                  tokenId = p.accessToken.accessToken;
-                  console.log('Found token in accessToken.accessToken');
-                } else if (p.accountTokens?.[0]?.accessToken) {
-                  tokenId = p.accountTokens[0].accessToken;
-                  console.log('Found token in accountTokens[0]');
+                  console.log('Found token in accessToken.accountTokens[0].tokenId');
                 } else if (p.tokenId) {
                   tokenId = p.tokenId;
-                  console.log('Found token in tokenId');
+                  console.log('Found token in p.tokenId');
+                }
+                // Legacy fallback: accessToken field (older SDK versions)
+                else if (p.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accountTokens[0].accessToken;
+                  console.log('Found token in accountTokens[0].accessToken (legacy)');
+                } else if (p.accessToken?.accessToken) {
+                  tokenId = p.accessToken.accessToken;
+                  console.log('Found token in accessToken.accessToken (legacy)');
                 }
 
                 if (tokenId) {
