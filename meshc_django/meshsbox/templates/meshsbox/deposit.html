@@ -419,52 +419,79 @@
             resultJson.textContent = JSON.stringify(p, null, 2);
             resultsEl.style.display = 'block';
 
-            console.log('onTransferFinished payload:', JSON.stringify(p, null, 2));
+            // === MMT DEBUG: Full payload ===
+            console.log('%c=== MMT DEBUG: onTransferFinished ===', 'background: #4CAF50; color: white; padding: 2px 6px;');
+            console.log('Status:', p.status);
+            console.log('Full payload:', JSON.stringify(p, null, 2));
+            console.log('Payload keys:', Object.keys(p));
+            console.log('accountTokens:', p.accountTokens);
+            console.log('accessToken:', p.accessToken);
+            console.log('brokerName:', p.brokerName);
 
             if (easyRelogin && p.status === 'success') {
-              console.log('Easy Relogin: attempting to save token...');
+              console.log('%c=== MMT: Attempting to save token ===', 'background: #2196F3; color: white; padding: 2px 6px;');
               try {
                 let tokenId = null;
                 let brokerName = p.brokerName || 'Unknown';
+                let source = 'none';
 
                 // MMT format: accountTokens[].tokenId (per Mesh docs)
+                console.log('Checking p.accountTokens?.[0]?.tokenId:', p.accountTokens?.[0]?.tokenId);
+                console.log('Checking p.accessToken?.accountTokens?.[0]?.tokenId:', p.accessToken?.accountTokens?.[0]?.tokenId);
+                console.log('Checking p.tokenId:', p.tokenId);
+
                 if (p.accountTokens?.[0]?.tokenId) {
                   tokenId = p.accountTokens[0].tokenId;
-                  console.log('Found token in accountTokens[0].tokenId (MMT format)');
+                  source = 'accountTokens[0].tokenId (MMT)';
                 } else if (p.accessToken?.accountTokens?.[0]?.tokenId) {
                   tokenId = p.accessToken.accountTokens[0].tokenId;
                   brokerName = p.accessToken.brokerName || brokerName;
-                  console.log('Found token in accessToken.accountTokens[0].tokenId');
+                  source = 'accessToken.accountTokens[0].tokenId';
                 } else if (p.tokenId) {
                   tokenId = p.tokenId;
-                  console.log('Found token in p.tokenId');
+                  source = 'p.tokenId';
                 }
                 // Legacy fallback: accessToken field (older SDK versions)
                 else if (p.accountTokens?.[0]?.accessToken) {
                   tokenId = p.accountTokens[0].accessToken;
-                  console.log('Found token in accountTokens[0].accessToken (legacy)');
+                  source = 'accountTokens[0].accessToken (legacy)';
                 } else if (p.accessToken?.accessToken) {
                   tokenId = p.accessToken.accessToken;
-                  console.log('Found token in accessToken.accessToken (legacy)');
+                  source = 'accessToken.accessToken (legacy)';
                 }
 
+                console.log('%cToken extraction result:', 'font-weight: bold;');
+                console.log('  Source:', source);
+                console.log('  Token found:', tokenId ? 'YES' : 'NO');
+                console.log('  Token prefix:', tokenId ? tokenId.substring(0, 30) + '...' : 'null');
+                console.log('  Broker:', brokerName);
+
                 if (tokenId) {
+                  const savePayload = {
+                    token_id: tokenId,
+                    integration_type: brokerName,
+                    user_id: userAddress,
+                    wallet_address: userAddress,
+                  };
+                  console.log('%cSaving token to backend...', 'color: #FF9800;');
+                  console.log('POST /meshc/api/save-token/', savePayload);
+
                   const saveResp = await fetch('/meshc/api/save-token/', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
                       'X-CSRFToken': csrfToken,
                     },
-                    body: JSON.stringify({
-                      token_id: tokenId,
-                      integration_type: brokerName,
-                      user_id: userAddress,
-                      wallet_address: userAddress,
-                    }),
+                    body: JSON.stringify(savePayload),
                   });
-                  console.log('Easy Relogin: token saved!', await saveResp.json());
+                  const saveResult = await saveResp.json();
+                  console.log('%c=== MMT: Token saved! ===', 'background: #4CAF50; color: white; padding: 2px 6px;');
+                  console.log('Response:', saveResult);
                 } else {
-                  console.warn('Easy Relogin: no token found in response. Keys:', Object.keys(p));
+                  console.warn('%c=== MMT: NO TOKEN FOUND ===', 'background: #f44336; color: white; padding: 2px 6px;');
+                  console.warn('Payload keys:', Object.keys(p));
+                  console.warn('accountTokens:', p.accountTokens);
+                  console.warn('accessToken:', p.accessToken);
                 }
               } catch (saveErr) {
                 console.warn('Easy Relogin: failed to save token', saveErr);

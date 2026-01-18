@@ -428,6 +428,15 @@
 
     // Save token to backend for Easy Relogin
     async function saveToken(tokenId, brokerName, userId) {
+      console.log('%c=== MMT: Saving token to backend ===', 'background: #2196F3; color: white; padding: 2px 6px;');
+      const savePayload = {
+        token_id: tokenId,
+        integration_type: brokerName,
+        user_id: userId,
+        wallet_address: userId,
+      };
+      console.log('POST /meshc/api/save-token/', savePayload);
+
       try {
         const saveResp = await fetch('/meshc/api/save-token/', {
           method: 'POST',
@@ -435,29 +444,34 @@
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfToken,
           },
-          body: JSON.stringify({
-            token_id: tokenId,
-            integration_type: brokerName,
-            user_id: userId,
-            wallet_address: userId,
-          }),
+          body: JSON.stringify(savePayload),
         });
-        console.log('Easy Relogin: token saved!', await saveResp.json());
+        const saveResult = await saveResp.json();
+        console.log('%c=== MMT: Token saved! ===', 'background: #4CAF50; color: white; padding: 2px 6px;');
+        console.log('Response:', saveResult);
         return true;
       } catch (saveErr) {
-        console.warn('Easy Relogin: failed to save token', saveErr);
+        console.error('%c=== MMT: Failed to save token ===', 'background: #f44336; color: white; padding: 2px 6px;');
+        console.error('Error:', saveErr);
         return false;
       }
     }
 
     // Extract token from Mesh callback payload
     function extractToken(payload) {
-      // Debug: log full payload structure
-      console.log('=== MESH CALLBACK PAYLOAD ===');
-      console.log(JSON.stringify(payload, null, 2));
+      console.log('%c=== MMT DEBUG: extractToken ===', 'background: #4CAF50; color: white; padding: 2px 6px;');
+      console.log('Full payload:', JSON.stringify(payload, null, 2));
+      console.log('Payload keys:', Object.keys(payload));
+      console.log('accountTokens:', payload.accountTokens);
+      console.log('accessToken:', payload.accessToken);
 
       let token = null;
       let source = 'none';
+
+      // Check each possible path
+      console.log('Checking payload.accountTokens?.[0]?.tokenId:', payload.accountTokens?.[0]?.tokenId);
+      console.log('Checking payload.accessToken?.accountTokens?.[0]?.tokenId:', payload.accessToken?.accountTokens?.[0]?.tokenId);
+      console.log('Checking payload.tokenId:', payload.tokenId);
 
       // MMT format: accountTokens[].tokenId (per Mesh docs)
       if (payload.accountTokens?.[0]?.tokenId) {
@@ -479,8 +493,14 @@
         source = 'accessToken.accessToken (legacy)';
       }
 
-      console.log(`Token extracted from: ${source}`);
-      console.log(`Token prefix: ${token ? token.substring(0, 30) + '...' : 'null'}`);
+      console.log('%cToken extraction result:', 'font-weight: bold;');
+      console.log('  Source:', source);
+      console.log('  Token found:', token ? 'YES' : 'NO');
+      console.log('  Token prefix:', token ? token.substring(0, 30) + '...' : 'null');
+
+      if (!token) {
+        console.warn('%c=== MMT: NO TOKEN FOUND ===', 'background: #f44336; color: white; padding: 2px 6px;');
+      }
 
       return token;
     }
