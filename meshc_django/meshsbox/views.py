@@ -137,7 +137,8 @@ def api_save_token(request):
     {
         "token_id": "tok_...",           # Required: Mesh access token
         "integration_type": "Coinbase",  # Required: broker name
-        "user_id": "GBXY..."             # Required: stellar/wallet address
+        "user_id": "GBXY...",            # Required: stellar/wallet address
+        "wallet_address": "GBXY..."      # Optional: explicit wallet address
     }
     """
     try:
@@ -148,6 +149,7 @@ def api_save_token(request):
     token_id = data.get('token_id')
     integration_type = data.get('integration_type')
     user_id = data.get('user_id')
+    wallet_address = data.get('wallet_address')
 
     if not token_id or not integration_type or not user_id:
         return JsonResponse({'error': 'token_id, integration_type, and user_id are required'}, status=400)
@@ -159,6 +161,7 @@ def api_save_token(request):
         integration_type=integration_type,
         defaults={
             'user_id': user_id,
+            'wallet_address': wallet_address,
             'status': 'active',
             'scope': 'read',
             'lang': 'en',
@@ -166,8 +169,9 @@ def api_save_token(request):
     )
 
     action = 'created' if created else 'updated'
-    logger.info("save-token: %s token_prefix=%s type=%s user=%s token_len=%d",
-                action, token_id[:20], integration_type, user_id[:12], len(token_id))
+    logger.info("save-token: %s token_prefix=%s type=%s user=%s wallet=%s",
+                action, token_id[:20], integration_type, user_id[:12],
+                wallet_address[:12] if wallet_address else 'none')
 
     return JsonResponse({'status': 'saved', 'action': action})
 
