@@ -138,7 +138,8 @@ def api_save_token(request):
         "token_id": "tok_...",           # Required: Mesh access token
         "integration_type": "Coinbase",  # Required: broker name
         "user_id": "GBXY...",            # Required: stellar/wallet address
-        "wallet_address": "GBXY..."      # Optional: explicit wallet address
+        "wallet_address": "GBXY...",     # Optional: explicit wallet address
+        "expires_at": "2025-01-20T..."   # Optional: ISO datetime expiry
     }
     """
     try:
@@ -150,9 +151,16 @@ def api_save_token(request):
     integration_type = data.get('integration_type')
     user_id = data.get('user_id')
     wallet_address = data.get('wallet_address')
+    expires_at_str = data.get('expires_at')
 
     if not token_id or not integration_type or not user_id:
         return JsonResponse({'error': 'token_id, integration_type, and user_id are required'}, status=400)
+
+    # Parse expires_at if provided
+    expires_at = None
+    if expires_at_str:
+        from django.utils.dateparse import parse_datetime
+        expires_at = parse_datetime(expires_at_str.replace('Z', '+00:00'))
 
     from .models import IntegrationToken
 
@@ -162,6 +170,7 @@ def api_save_token(request):
         defaults={
             'user_id': user_id,
             'wallet_address': wallet_address,
+            'expires_at': expires_at,
             'status': 'active',
             'scope': 'read',
             'lang': 'en',
@@ -169,9 +178,9 @@ def api_save_token(request):
     )
 
     action = 'created' if created else 'updated'
-    logger.info("save-token: %s token_prefix=%s type=%s user=%s wallet=%s",
+    logger.info("save-token: %s token_prefix=%s type=%s user=%s expires=%s",
                 action, token_id[:20], integration_type, user_id[:12],
-                wallet_address[:12] if wallet_address else 'none')
+                expires_at.isoformat() if expires_at else 'never')
 
     return JsonResponse({'status': 'saved', 'action': action})
 

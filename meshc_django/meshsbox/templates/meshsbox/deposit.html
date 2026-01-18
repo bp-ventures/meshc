@@ -470,11 +470,21 @@
                 console.log('  Broker:', brokerName);
 
                 if (tokenId) {
+                  // Calculate expiry datetime if expiresInSeconds provided
+                  const expiresInSeconds = p.expiresInSeconds || p.accessToken?.expiresInSeconds;
+                  let expiresAt = null;
+                  if (expiresInSeconds) {
+                    expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+                    console.log('  Expires in:', expiresInSeconds, 'seconds');
+                    console.log('  Expires at:', expiresAt);
+                  }
+
                   const savePayload = {
                     token_id: tokenId,
                     integration_type: brokerName,
                     user_id: userAddress,
                     wallet_address: userAddress,
+                    expires_at: expiresAt,
                   };
                   console.log('%cSaving token to backend...', 'color: #FF9800;');
                   console.log('POST /meshc/api/save-token/', savePayload);
