@@ -413,33 +413,32 @@
 
         const link = createLink({
           clientId: 'meshc-django',
-          onIntegrationConnected: (p) => setStatus(`Connected to ${p.brokerName}`, 'success'),
-          onTransferFinished: async (p) => {
-            setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
-            resultJson.textContent = JSON.stringify(p, null, 2);
-            resultsEl.style.display = 'block';
-
-            // === MMT DEBUG: Full payload ===
-            console.log('%c=== MMT DEBUG: onTransferFinished ===', 'background: #4CAF50; color: white; padding: 2px 6px;');
-            console.log('Status:', p.status);
+          onIntegrationConnected: async (p) => {
+            // === MMT DEBUG: onIntegrationConnected is where the token arrives ===
+            console.log('%c=== MMT DEBUG: onIntegrationConnected ===', 'background: #9C27B0; color: white; padding: 2px 6px;');
             console.log('Full payload:', JSON.stringify(p, null, 2));
             console.log('Payload keys:', Object.keys(p));
             console.log('accountTokens:', p.accountTokens);
             console.log('accessToken:', p.accessToken);
             console.log('brokerName:', p.brokerName);
+            console.log('brokerType:', p.brokerType);
 
-            if (easyRelogin && p.status === 'success') {
+            setStatus(`Connected to ${p.brokerName || p.brokerType || 'exchange'}`, 'success');
+
+            // Save token for Easy Relogin
+            if (easyRelogin) {
               console.log('%c=== MMT: Attempting to save token ===', 'background: #2196F3; color: white; padding: 2px 6px;');
               try {
                 let tokenId = null;
-                let brokerName = p.brokerName || 'Unknown';
+                let brokerName = p.brokerName || p.brokerType || 'Unknown';
                 let source = 'none';
 
-                // MMT format: accountTokens[].tokenId (per Mesh docs)
+                // Check all possible paths for tokenId
                 console.log('Checking p.accountTokens?.[0]?.tokenId:', p.accountTokens?.[0]?.tokenId);
                 console.log('Checking p.accessToken?.accountTokens?.[0]?.tokenId:', p.accessToken?.accountTokens?.[0]?.tokenId);
                 console.log('Checking p.tokenId:', p.tokenId);
 
+                // MMT format: accountTokens[].tokenId (per Mesh docs)
                 if (p.accountTokens?.[0]?.tokenId) {
                   tokenId = p.accountTokens[0].tokenId;
                   source = 'accountTokens[0].tokenId (MMT)';
@@ -488,15 +487,25 @@
                   console.log('%c=== MMT: Token saved! ===', 'background: #4CAF50; color: white; padding: 2px 6px;');
                   console.log('Response:', saveResult);
                 } else {
-                  console.warn('%c=== MMT: NO TOKEN FOUND ===', 'background: #f44336; color: white; padding: 2px 6px;');
+                  console.warn('%c=== MMT: NO TOKEN FOUND in onIntegrationConnected ===', 'background: #f44336; color: white; padding: 2px 6px;');
+                  console.warn('This may be normal for some integration types.');
                   console.warn('Payload keys:', Object.keys(p));
-                  console.warn('accountTokens:', p.accountTokens);
-                  console.warn('accessToken:', p.accessToken);
                 }
               } catch (saveErr) {
-                console.warn('Easy Relogin: failed to save token', saveErr);
+                console.error('%c=== MMT: Failed to save token ===', 'background: #f44336; color: white; padding: 2px 6px;');
+                console.error('Error:', saveErr);
               }
             }
+          },
+          onTransferFinished: async (p) => {
+            // Transfer completed - show results
+            console.log('%c=== Transfer Finished ===', 'background: #607D8B; color: white; padding: 2px 6px;');
+            console.log('Status:', p.status);
+            console.log('Transfer details:', JSON.stringify(p, null, 2));
+
+            setStatus(`Transfer ${p.status}`, p.status === 'success' ? 'success' : 'error');
+            resultJson.textContent = JSON.stringify(p, null, 2);
+            resultsEl.style.display = 'block';
           },
           onExit: (err) => {
             submitBtn.disabled = false;
