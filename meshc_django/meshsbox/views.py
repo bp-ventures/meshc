@@ -57,8 +57,8 @@ def get_client_ip(request) -> str:
 
 
 def index(request):
-    """Render the self-service form."""
-    return render(request, 'meshsbox/link.html')
+    """Render the deposit form (CEX → wallet)."""
+    return render(request, 'meshsbox/deposit.html')
 
 
 @require_POST
