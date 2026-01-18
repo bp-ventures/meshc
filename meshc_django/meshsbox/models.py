@@ -49,7 +49,7 @@ class IntegrationToken(models.Model):
     Supports CEX integrations (user_id) and wallet integrations (wallet_address).
     Composite unique on (token_id, integration_type).
     """
-    token_id = models.CharField(max_length=255, db_index=True)
+    token_id = models.CharField(max_length=1024, db_index=True)
     integration_type = models.CharField(max_length=64, db_index=True)  # Coinbase, Binance, MetaMask
     user_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     wallet_address = models.CharField(max_length=128, null=True, blank=True, db_index=True)
