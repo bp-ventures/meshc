@@ -56,7 +56,7 @@ def get_client_ip(request) -> str:
     return request.META.get("REMOTE_ADDR", "")
 
 
-def index(request):
+def deposit(request):
     """Render the deposit form (CEX → wallet)."""
     return render(request, 'meshsbox/deposit.html')
 

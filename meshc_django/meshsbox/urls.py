@@ -3,7 +3,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.index, name='index'),
+    path('', views.deposit, name='index'),  # Root redirects to deposit
+    path('deposit/', views.deposit, name='deposit'),
     path('withdraw/', views.withdraw, name='withdraw'),
     path('api/link-token/', views.api_link_token, name='api_link_token'),
     path('api/withdraw-token/', views.api_withdraw_token, name='api_withdraw_token'),
