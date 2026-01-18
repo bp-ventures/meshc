@@ -179,25 +179,19 @@ import os
 FERNET_KEYS = [os.environ.get('FIELD_ENCRYPTION_KEY', 'CHANGE_ME_IN_PROD')]
 ```
 
-**1.3 Create encrypted field wrapper**
-```python
-# meshsbox/fields.py
-from fernet_fields import EncryptedTextField
-import hashlib
-
-def token_hash(token_id: str) -> str:
-    """SHA-256 hash for searchable index (first 64 chars)."""
-    return hashlib.sha256(token_id.encode()).hexdigest()
-```
-
 ---
 
 ### Phase 2: Model Migration
 
 **2.1 Add new encrypted fields (migration 0003)**
 ```python
-# IntegrationToken model changes
+# meshsbox/models.py
+import hashlib
 from fernet_fields import EncryptedTextField
+
+def token_hash(token_id: str) -> str:
+    """SHA-256 hash for searchable index."""
+    return hashlib.sha256(token_id.encode()).hexdigest()
 
 class IntegrationToken(models.Model):
     # New: searchable hash index
@@ -286,8 +280,7 @@ FERNET_KEYS = [
 |------|--------|
 | `pyproject.toml` | Add `django-fernet-fields` dependency |
 | `meshc_django/meshc_django/settings.py` | Add `FERNET_KEYS` config |
-| `meshc_django/meshsbox/fields.py` | NEW: `token_hash()` utility |
-| `meshc_django/meshsbox/models.py` | Add encrypted fields, deprecate old |
+| `meshc_django/meshsbox/models.py` | Add `token_hash()`, encrypted fields |
 | `meshc_django/meshsbox/migrations/0003_*.py` | Add new fields |
 | `meshc_django/meshsbox/migrations/0004_*.py` | Data migration |
 | `meshc_django/meshsbox/migrations/0005_*.py` | Remove old field |
