@@ -208,10 +208,11 @@ def api_get_tokens(request):
     )
 
     # Format for Mesh SDK accountTokens parameter
+    # Mesh expects 'accessToken' and 'brokerType' fields for skip-auth relogin
     account_tokens = [
         {
-            'tokenId': t.token_id,
-            'type': t.integration_type,
+            'accessToken': t.token_id,
+            'brokerType': t.integration_type,  # Now stores internal type like "binanceInternationalDirect"
         }
         for t in tokens
     ]

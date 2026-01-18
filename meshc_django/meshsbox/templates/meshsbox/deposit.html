@@ -447,7 +447,10 @@
               console.log('%c=== MMT: Attempting to save token ===', 'background: #2196F3; color: white; padding: 2px 6px;');
               try {
                 let tokenId = null;
-                let brokerName = p.brokerName || p.brokerType || p.accessToken?.brokerName || p.accessToken?.brokerType || 'Unknown';
+                // brokerType is the internal name (e.g., "binanceInternationalDirect") - needed for SDK relogin
+                // brokerName is the display name (e.g., "Binance") - for UI only
+                let brokerType = p.brokerType || p.accessToken?.brokerType || 'unknown';
+                let brokerName = p.brokerName || p.accessToken?.brokerName || brokerType;
                 let source = 'none';
 
                 // Check all possible paths for token
@@ -466,11 +469,9 @@
                   source = 'accountTokens[0].accessToken';
                 } else if (p.accessToken?.accountTokens?.[0]?.tokenId) {
                   tokenId = p.accessToken.accountTokens[0].tokenId;
-                  brokerName = p.accessToken.brokerName || brokerName;
                   source = 'accessToken.accountTokens[0].tokenId';
                 } else if (p.accessToken?.accountTokens?.[0]?.accessToken) {
                   tokenId = p.accessToken.accountTokens[0].accessToken;
-                  brokerName = p.accessToken.brokerName || brokerName;
                   source = 'accessToken.accountTokens[0].accessToken';
                 } else if (p.tokenId) {
                   tokenId = p.tokenId;
@@ -484,7 +485,8 @@
                 console.log('  Source:', source);
                 console.log('  Token found:', tokenId ? 'YES' : 'NO');
                 console.log('  Token prefix:', tokenId ? tokenId.substring(0, 30) + '...' : 'null');
-                console.log('  Broker:', brokerName);
+                console.log('  brokerType (internal):', brokerType);
+                console.log('  brokerName (display):', brokerName);
 
                 if (tokenId) {
                   // Calculate expiry datetime if expiresInSeconds provided
@@ -498,7 +500,7 @@
 
                   const savePayload = {
                     token_id: tokenId,
-                    integration_type: brokerName,
+                    integration_type: brokerType,  // Use internal brokerType for SDK relogin compatibility
                     user_id: userAddress,
                     wallet_address: userAddress,
                     expires_at: expiresAt,
