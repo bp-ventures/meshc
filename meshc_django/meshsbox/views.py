@@ -156,11 +156,13 @@ def api_save_token(request):
     if not token_id or not integration_type or not user_id:
         return JsonResponse({'error': 'token_id, integration_type, and user_id are required'}, status=400)
 
-    # Parse expires_at if provided
+    # Parse expires_at if provided (strip timezone for SQLite with USE_TZ=False)
     expires_at = None
     if expires_at_str:
         from django.utils.dateparse import parse_datetime
-        expires_at = parse_datetime(expires_at_str.replace('Z', '+00:00'))
+        parsed = parse_datetime(expires_at_str.replace('Z', '+00:00'))
+        if parsed:
+            expires_at = parsed.replace(tzinfo=None)  # Make naive for SQLite
 
     from .models import IntegrationToken
 
