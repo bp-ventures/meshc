@@ -185,6 +185,42 @@ def api_save_token(request):
     return JsonResponse({'status': 'saved', 'action': action})
 
 
+def api_get_tokens(request):
+    """Get stored tokens for a user (for Easy Relogin).
+
+    GET /meshc/api/get-tokens/?user_id=GBXY...
+
+    Returns tokens in Mesh SDK accountTokens format.
+    """
+    user_id = request.GET.get('user_id')
+    if not user_id:
+        return JsonResponse({'error': 'user_id is required'}, status=400)
+
+    from .models import IntegrationToken
+    from django.utils import timezone
+
+    # Get active, non-expired tokens for this user
+    tokens = IntegrationToken.objects.filter(
+        user_id=user_id,
+        status='active'
+    ).exclude(
+        expires_at__lt=timezone.now()  # Exclude expired
+    )
+
+    # Format for Mesh SDK accountTokens parameter
+    account_tokens = [
+        {
+            'tokenId': t.token_id,
+            'type': t.integration_type,
+        }
+        for t in tokens
+    ]
+
+    logger.info("get-tokens: user=%s found=%d tokens", user_id[:12], len(account_tokens))
+
+    return JsonResponse({'accountTokens': account_tokens})
+
+
 @csrf_exempt
 @require_POST
 def api_webhook(request):

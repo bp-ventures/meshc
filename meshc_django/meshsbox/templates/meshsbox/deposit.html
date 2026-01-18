@@ -409,10 +409,27 @@
         const { link_token } = await resp.json();
         setStatus('Opening Mesh Link...', 'loading');
 
+        // Fetch stored tokens for Easy Relogin
+        let storedTokens = [];
+        if (easyRelogin) {
+          try {
+            const tokensResp = await fetch(`/meshc/api/get-tokens/?user_id=${encodeURIComponent(userAddress)}`);
+            const tokensData = await tokensResp.json();
+            storedTokens = tokensData.accountTokens || [];
+            if (storedTokens.length > 0) {
+              console.log('%c=== MMT: Found stored tokens for relogin ===', 'background: #9C27B0; color: white; padding: 2px 6px;');
+              console.log('Stored tokens:', storedTokens);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch stored tokens:', err);
+          }
+        }
+
         const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
 
-        const link = createLink({
+        const linkConfig = {
           clientId: 'meshc-django',
+          ...(storedTokens.length > 0 && { accountTokens: storedTokens }),
           onIntegrationConnected: async (p) => {
             // === MMT DEBUG: onIntegrationConnected is where the token arrives ===
             console.log('%c=== MMT DEBUG: onIntegrationConnected ===', 'background: #9C27B0; color: white; padding: 2px 6px;');
@@ -525,8 +542,10 @@
             submitBtn.disabled = false;
             if (err) setStatus(`Error: ${err}`, 'error');
           },
-        });
+        };
 
+        console.log('createLink config:', { ...linkConfig, accountTokens: storedTokens.length > 0 ? `[${storedTokens.length} tokens]` : 'none' });
+        const link = createLink(linkConfig);
         link.openLink(link_token);
       } catch (err) {
         setStatus(err.message, 'error');

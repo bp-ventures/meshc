@@ -10,5 +10,6 @@ urlpatterns = [
     path('api/withdraw-token/', views.api_withdraw_token, name='api_withdraw_token'),
     path('api/deposit-token/', views.api_deposit_token, name='api_deposit_token'),
     path('api/save-token/', views.api_save_token, name='api_save_token'),
+    path('api/get-tokens/', views.api_get_tokens, name='api_get_tokens'),
     path('api/webhook/', views.api_webhook, name='api_webhook'),
 ]
