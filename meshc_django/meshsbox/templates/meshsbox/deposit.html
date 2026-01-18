@@ -430,33 +430,37 @@
               console.log('%c=== MMT: Attempting to save token ===', 'background: #2196F3; color: white; padding: 2px 6px;');
               try {
                 let tokenId = null;
-                let brokerName = p.brokerName || p.brokerType || 'Unknown';
+                let brokerName = p.brokerName || p.brokerType || p.accessToken?.brokerName || p.accessToken?.brokerType || 'Unknown';
                 let source = 'none';
 
-                // Check all possible paths for tokenId
+                // Check all possible paths for token
                 console.log('Checking p.accountTokens?.[0]?.tokenId:', p.accountTokens?.[0]?.tokenId);
+                console.log('Checking p.accountTokens?.[0]?.accessToken:', p.accountTokens?.[0]?.accessToken);
                 console.log('Checking p.accessToken?.accountTokens?.[0]?.tokenId:', p.accessToken?.accountTokens?.[0]?.tokenId);
+                console.log('Checking p.accessToken?.accountTokens?.[0]?.accessToken:', p.accessToken?.accountTokens?.[0]?.accessToken);
                 console.log('Checking p.tokenId:', p.tokenId);
 
-                // MMT format: accountTokens[].tokenId (per Mesh docs)
+                // Try all known paths (Mesh SDK varies by integration type)
                 if (p.accountTokens?.[0]?.tokenId) {
                   tokenId = p.accountTokens[0].tokenId;
-                  source = 'accountTokens[0].tokenId (MMT)';
+                  source = 'accountTokens[0].tokenId';
+                } else if (p.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accountTokens[0].accessToken;
+                  source = 'accountTokens[0].accessToken';
                 } else if (p.accessToken?.accountTokens?.[0]?.tokenId) {
                   tokenId = p.accessToken.accountTokens[0].tokenId;
                   brokerName = p.accessToken.brokerName || brokerName;
                   source = 'accessToken.accountTokens[0].tokenId';
+                } else if (p.accessToken?.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accessToken.accountTokens[0].accessToken;
+                  brokerName = p.accessToken.brokerName || brokerName;
+                  source = 'accessToken.accountTokens[0].accessToken';
                 } else if (p.tokenId) {
                   tokenId = p.tokenId;
                   source = 'p.tokenId';
-                }
-                // Legacy fallback: accessToken field (older SDK versions)
-                else if (p.accountTokens?.[0]?.accessToken) {
-                  tokenId = p.accountTokens[0].accessToken;
-                  source = 'accountTokens[0].accessToken (legacy)';
                 } else if (p.accessToken?.accessToken) {
                   tokenId = p.accessToken.accessToken;
-                  source = 'accessToken.accessToken (legacy)';
+                  source = 'accessToken.accessToken';
                 }
 
                 console.log('%cToken extraction result:', 'font-weight: bold;');

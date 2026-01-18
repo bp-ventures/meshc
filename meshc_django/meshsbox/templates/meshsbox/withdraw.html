@@ -470,27 +470,30 @@
 
       // Check each possible path
       console.log('Checking payload.accountTokens?.[0]?.tokenId:', payload.accountTokens?.[0]?.tokenId);
+      console.log('Checking payload.accountTokens?.[0]?.accessToken:', payload.accountTokens?.[0]?.accessToken);
       console.log('Checking payload.accessToken?.accountTokens?.[0]?.tokenId:', payload.accessToken?.accountTokens?.[0]?.tokenId);
+      console.log('Checking payload.accessToken?.accountTokens?.[0]?.accessToken:', payload.accessToken?.accountTokens?.[0]?.accessToken);
       console.log('Checking payload.tokenId:', payload.tokenId);
 
-      // MMT format: accountTokens[].tokenId (per Mesh docs)
+      // Try all known paths (Mesh SDK varies by integration type)
       if (payload.accountTokens?.[0]?.tokenId) {
         token = payload.accountTokens[0].tokenId;
-        source = 'accountTokens[0].tokenId (MMT)';
+        source = 'accountTokens[0].tokenId';
+      } else if (payload.accountTokens?.[0]?.accessToken) {
+        token = payload.accountTokens[0].accessToken;
+        source = 'accountTokens[0].accessToken';
       } else if (payload.accessToken?.accountTokens?.[0]?.tokenId) {
         token = payload.accessToken.accountTokens[0].tokenId;
         source = 'accessToken.accountTokens[0].tokenId';
+      } else if (payload.accessToken?.accountTokens?.[0]?.accessToken) {
+        token = payload.accessToken.accountTokens[0].accessToken;
+        source = 'accessToken.accountTokens[0].accessToken';
       } else if (payload.tokenId) {
         token = payload.tokenId;
         source = 'tokenId';
-      }
-      // Legacy fallback: accessToken field (older SDK versions)
-      else if (payload.accountTokens?.[0]?.accessToken) {
-        token = payload.accountTokens[0].accessToken;
-        source = 'accountTokens[0].accessToken (legacy)';
       } else if (payload.accessToken?.accessToken) {
         token = payload.accessToken.accessToken;
-        source = 'accessToken.accessToken (legacy)';
+        source = 'accessToken.accessToken';
       }
 
       console.log('%cToken extraction result:', 'font-weight: bold;');
