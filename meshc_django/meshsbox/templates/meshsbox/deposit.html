@@ -500,7 +500,7 @@
 
                   const savePayload = {
                     token_id: tokenId,
-                    integration_type: brokerName,  // Display name like "Coinbase", "Binance" per Mesh docs
+                    integration_type: brokerType,  // Internal name like "binanceInternationalDirect" required by SDK
                     user_id: userAddress,
                     wallet_address: userAddress,
                     expires_at: expiresAt,
