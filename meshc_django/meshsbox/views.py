@@ -118,7 +118,7 @@ def api_link_token(request):
     ).values_list('token_id', 'integration_type')
 
     account_tokens = [
-        {"tokenId": token_id, "type": integration_type}
+        {"accessToken": token_id, "type": integration_type}
         for token_id, integration_type in stored_tokens
     ]
 
@@ -239,10 +239,10 @@ def api_get_tokens(request):
     )
 
     # Format for Mesh SDK accountTokens parameter
-    # Per Mesh docs: { tokenId: "...", type: "Coinbase" }
+    # Per Mesh docs: { accessToken: "...", type: "binanceInternationalDirect" }
     account_tokens = [
         {
-            'tokenId': t.token_id,
+            'accessToken': t.token_id,
             'type': t.integration_type,
         }
         for t in tokens
