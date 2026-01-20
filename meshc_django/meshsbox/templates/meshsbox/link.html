@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mesh Link Token Generator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #2d3748;
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: #718096;
+      font-size: 14px;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      color: #4a5568;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: all 0.2s;
+      background: white;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+      color: #4a5568;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-btn:hover {
+      border-color: #cbd5e0;
+    }
+
+    .mode-btn.active {
+      border-color: #667eea;
+      background: #667eea;
+      color: white;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: auto;
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      margin: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    }
+
+    button[type="submit"]:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    button[type="submit"]:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .status.success {
+      background: #c6f6d5;
+      color: #22543d;
+      border: 1px solid #9ae6b4;
+    }
+
+    .status.error {
+      background: #fed7d7;
+      color: #742a2a;
+      border: 1px solid #fc8181;
+    }
+
+    .status.loading {
+      background: #bee3f8;
+      color: #2c5282;
+      border: 1px solid #90cdf4;
+    }
+
+    .helper-text {
+      font-size: 12px;
+      color: #718096;
+      margin-top: 4px;
+    }
+
+    .amount-field {
+      display: none;
+    }
+
+    .amount-field.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Mesh Link Token</h1>
+    <p class="subtitle">Generate link tokens for Mesh Connect deposits</p>
+
+    <form id="linkForm">
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" data-mode="cex">CEX Mode</button>
+        <button type="button" class="mode-btn" data-mode="wallet">Wallet Mode</button>
+      </div>
+
+      <div class="form-group">
+        <label for="address">Destination Address</label>
+        <input
+          type="text"
+          id="address"
+          name="address"
+          placeholder="GBXY... or 0x..."
+          required
+        />
+        <div class="helper-text">Stellar address (CEX mode) or Ethereum address (Wallet mode)</div>
+      </div>
+
+      <div class="form-group">
+        <label for="symbol">Token Symbol</label>
+        <select id="symbol" name="symbol" required>
+          <option value="USDC">USDC</option>
+          <option value="XLM">XLM</option>
+          <option value="SEPOLIAETH">SEPOLIAETH</option>
+        </select>
+      </div>
+
+      <div class="form-group amount-field">
+        <label for="amount">Amount (Optional)</label>
+        <input
+          type="number"
+          id="amount"
+          name="amount"
+          placeholder="100.00"
+          step="0.01"
+          min="0"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="user_id">User ID (Optional)</label>
+        <input
+          type="text"
+          id="user_id"
+          name="user_id"
+          placeholder="user123"
+        />
+        <div class="helper-text">For token storage and Easy Relogin (defaults to wallet address)</div>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="easyRelogin" name="easyRelogin" checked />
+        <label for="easyRelogin">Enable Easy Relogin (skip re-authentication)</label>
+      </div>
+
+      <button type="submit" id="submitBtn">Generate Link Token</button>
+
+      <div id="status" class="status"></div>
+    </form>
+  </div>
+
+  <script type="module">
+    const form = document.getElementById('linkForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusDiv = document.getElementById('status');
+    const addressInput = document.getElementById('address');
+    const symbolSelect = document.getElementById('symbol');
+    const amountInput = document.getElementById('amount');
+    const userIdInput = document.getElementById('user_id');
+    const easyReloginCheckbox = document.getElementById('easyRelogin');
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const amountField = document.querySelector('.amount-field');
+
+    let walletMode = false;
+
+    // Mode toggle
+    modeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        modeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        walletMode = btn.dataset.mode === 'wallet';
+
+        if (walletMode) {
+          addressInput.placeholder = '0x...';
+          symbolSelect.value = 'SEPOLIAETH';
+          amountField.classList.add('show');
+        } else {
+          addressInput.placeholder = 'GBXY...';
+          symbolSelect.value = 'USDC';
+          amountField.classList.remove('show');
+        }
+      });
+    });
+
+    function setStatus(message, type) {
+      statusDiv.textContent = message;
+      statusDiv.className = `status ${type}`;
+      statusDiv.style.display = 'block';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      setStatus('Generating link token...', 'loading');
+
+      const address = addressInput.value.trim();
+      const symbol = symbolSelect.value;
+      const amount = amountInput.value ? parseFloat(amountInput.value) : null;
+      const userId = userIdInput.value.trim() || address;
+      const easyRelogin = easyReloginCheckbox.checked;
+
+      try {
+        // Step 1: Generate link token (with account_tokens from backend)
+        const payload = {
+          address,
+          symbol,
+          wallet: walletMode,
+          user_id: userId,
+        };
+        if (amount) payload.amount = amount;
+
+        const resp = await fetch('/meshc/api/link-token/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) throw new Error((await resp.json()).error || 'API error');
+
+        const { link_token, account_tokens } = await resp.json();
+        setStatus('Opening Mesh Link...', 'loading');
+
+        // Step 2: Fetch stored tokens for Easy Relogin (optional fallback)
+        let storedTokens = [];
+        if (easyRelogin) {
+          try {
+            const tokensResp = await fetch(`/meshc/api/get-tokens/?user_id=${encodeURIComponent(userId)}`);
+            const tokensData = await tokensResp.json();
+            storedTokens = tokensData.accountTokens || [];
+            if (storedTokens.length > 0) {
+              console.log('%c=== MMT: Found stored tokens for relogin ===', 'background: #9C27B0; color: white; padding: 2px 6px;');
+              console.log('Stored tokens:', storedTokens);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch stored tokens:', err);
+          }
+        }
+
+        // Step 3: Open Mesh Link with stored tokens
+        const { createLink } = await import('https://esm.sh/@meshconnect/web-link-sdk');
+
+        const linkConfig = {
+          clientId: 'meshc-django',
+          ...(storedTokens.length > 0 && { accountTokens: storedTokens }),
+          onIntegrationConnected: async (p) => {
+            console.log('%c=== MMT DEBUG: onIntegrationConnected ===', 'background: #9C27B0; color: white; padding: 2px 6px;');
+            console.log('Full payload:', JSON.stringify(p, null, 2));
+            console.log('accountTokens:', p.accountTokens);
+
+            setStatus(`Connected to ${p.brokerName || p.brokerType || 'exchange'}`, 'success');
+
+            // Save token if Easy Relogin enabled
+            if (easyRelogin) {
+              try {
+                let tokenId = null;
+                let brokerType = p.brokerType || p.accessToken?.brokerType || 'unknown';
+                let brokerName = p.brokerName || p.accessToken?.brokerName || brokerType;
+
+                // Try all known paths for token (Mesh SDK varies by integration)
+                if (p.accountTokens?.[0]?.tokenId) {
+                  tokenId = p.accountTokens[0].tokenId;
+                } else if (p.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accountTokens[0].accessToken;
+                } else if (p.accessToken?.accountTokens?.[0]?.tokenId) {
+                  tokenId = p.accessToken.accountTokens[0].tokenId;
+                } else if (p.accessToken?.accountTokens?.[0]?.accessToken) {
+                  tokenId = p.accessToken.accountTokens[0].accessToken;
+                } else if (p.tokenId) {
+                  tokenId = p.tokenId;
+                } else if (p.accessToken?.accessToken) {
+                  tokenId = p.accessToken.accessToken;
+                }
+
+                if (tokenId) {
+                  const saveResp = await fetch('/meshc/api/save-token/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      token_id: tokenId,
+                      integration_type: brokerName,
+                      user_id: userId,
+                      wallet_address: address,
+                    }),
+                  });
+                  const saveData = await saveResp.json();
+                  console.log('%c=== MMT: Token saved ===', 'background: #4CAF50; color: white; padding: 2px 6px;', saveData);
+                } else {
+                  console.warn('No tokenId found in callback payload - cannot save token');
+                }
+              } catch (err) {
+                console.error('Failed to save token:', err);
+              }
+            }
+          },
+          onTransferFinished: (p) => {
+            setStatus(`Transfer completed! Hash: ${p.txId || 'pending'}`, 'success');
+          },
+          onExit: (err) => {
+            submitBtn.disabled = false;
+            if (err) setStatus(`Error: ${err}`, 'error');
+          },
+        };
+
+        console.log('createLink config:', { ...linkConfig, accountTokens: storedTokens.length > 0 ? `[${storedTokens.length} tokens]` : 'none' });
+        const link = createLink(linkConfig);
+        link.openLink(link_token);
+      } catch (err) {
+        setStatus(err.message, 'error');
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -406,7 +406,7 @@
 
         if (!resp.ok) throw new Error((await resp.json()).error || 'API error');
 
-        const { link_token } = await resp.json();
+        const { link_token, account_tokens } = await resp.json();
         setStatus('Opening Mesh Link...', 'loading');
 
         // Fetch stored tokens for Easy Relogin

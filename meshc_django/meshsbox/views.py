@@ -61,16 +61,29 @@ def deposit(request):
     return render(request, 'meshsbox/deposit.html')
 
 
+def link(request):
+    """Render the link token generator form."""
+    return render(request, 'meshsbox/link.html')
+
+
 @require_POST
 def api_link_token(request):
-    """Generate Mesh link token.
+    """Generate Mesh link token and retrieve stored account tokens.
 
     POST /meshc/api/link-token/
     {
         "address": "GBXY...",      # Required
         "symbol": "USDC",          # Default: USDC
         "amount": 100.0,           # Optional
-        "wallet": false            # true for Sepolia wallet mode
+        "wallet": false,           # true for Sepolia wallet mode
+        "user_id": "GBXY..."       # Optional, for token reuse
+    }
+
+    Returns:
+    {
+        "link_token": "...",
+        "expires_at": "...",
+        "account_tokens": [{"tokenId": "...", "type": "Coinbase"}]  # For relogin
     }
     """
     try:
@@ -96,6 +109,21 @@ def api_link_token(request):
     user_id = data.get('user_id', 'web-user')
     amount = data.get('amount')
     wallet_mode = data.get('wallet', False)
+
+    # Retrieve stored tokens for Easy Relogin
+    from .models import IntegrationToken
+    stored_tokens = IntegrationToken.objects.filter(
+        user_id=user_id,
+        status='active'
+    ).values_list('token_id', 'integration_type')
+
+    account_tokens = [
+        {"tokenId": token_id, "type": integration_type}
+        for token_id, integration_type in stored_tokens
+    ]
+
+    if account_tokens:
+        logger.info("api_link_token: found %d stored tokens for user %s", len(account_tokens), user_id[:12])
 
     try:
         if wallet_mode:
@@ -123,6 +151,7 @@ def api_link_token(request):
         return JsonResponse({
             'link_token': result.token,
             'expires_at': result.expires_at,
+            'account_tokens': account_tokens,  # Return tokens for frontend to pass to createLink
         })
     except Exception as e:
         logger.error("link-token: failed %s", e)
