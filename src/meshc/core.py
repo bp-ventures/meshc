@@ -190,6 +190,8 @@ class ExchangeDepositAddress:
     symbol: str  # Token symbol (e.g., "ETH", "USDC")
     address: str  # Deposit address on the exchange
     chain: str  # Network/chain name (e.g., "ETH", "DOGE")
+    memo: str | None = None  # Memo/tag required for Stellar and some exchanges
+    minimum_deposit_amount: str | None = None  # Minimum deposit threshold
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -562,6 +564,8 @@ def get_exchange_deposit_address(
         symbol=content.get("symbol", symbol),
         address=content["address"],
         chain=content.get("chain", ""),
+        memo=content.get("memo"),
+        minimum_deposit_amount=content.get("minimumDepositAmount"),
         raw=content,
     )
 

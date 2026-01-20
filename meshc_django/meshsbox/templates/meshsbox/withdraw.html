@@ -357,6 +357,17 @@
     <div class="deposit-address" id="deposit-address-display" style="display: none;">
       <h3>Deposit Address</h3>
       <div class="address-value" id="deposit-address-value"></div>
+      <!-- Memo display (critical for Stellar/XLM) -->
+      <div id="memo-display" style="display: none; margin-top: 0.75rem;">
+        <h3 style="color: #dc2626; font-weight: 600; font-size: 0.85rem;">⚠️ Memo (Required)</h3>
+        <div class="address-value" id="memo-value" style="border-color: #fca5a5; background: #fef2f2;"></div>
+      </div>
+      <!-- Minimum deposit display -->
+      <div id="min-deposit-display" style="display: none; margin-top: 0.5rem;">
+        <span style="font-size: 0.8rem; color: #6b7280;">
+          Minimum deposit: <strong id="min-deposit-value"></strong>
+        </span>
+      </div>
     </div>
 
     <div class="results" id="results">
@@ -682,9 +693,9 @@
           throw new Error('No deposit address received');
         }
 
-        // Display the deposit address
+        // Display the deposit address (and memo if present)
         setStatus(`Success! Your ${exchangeType} deposit address:`, 'success');
-        showDepositAddress(depositData.deposit_address);
+        showDepositAddress(depositData.deposit_address, depositData.memo, depositData.minimum_deposit_amount);
 
         // Show full response in results
         resultJson.textContent = JSON.stringify(depositData, null, 2);
@@ -698,10 +709,18 @@
     }
 
     // Show deposit address in UI
-    function showDepositAddress(address) {
+    function showDepositAddress(address, memo, minDeposit) {
       if (address) {
         depositAddressValue.textContent = address;
         depositAddressDisplay.style.display = 'block';
+      }
+      if (memo) {
+        document.getElementById('memo-value').textContent = memo;
+        document.getElementById('memo-display').style.display = 'block';
+      }
+      if (minDeposit) {
+        document.getElementById('min-deposit-value').textContent = minDeposit;
+        document.getElementById('min-deposit-display').style.display = 'block';
       }
     }
 
