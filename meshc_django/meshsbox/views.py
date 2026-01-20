@@ -575,10 +575,12 @@ def api_deposit_token(request):
             api_url=config['api_url'],
         )
 
-        logger.info("deposit-token: created transfer token for %s to %s", user_id[:12], deposit_addr.address[:16])
+        logger.info("deposit-token: created transfer token for %s to %s (memo=%s)", user_id[:12], deposit_addr.address[:16], deposit_addr.memo)
         return JsonResponse({
             'link_token': result.token,
             'deposit_address': deposit_addr.address,
+            'memo': deposit_addr.memo,
+            'minimum_deposit_amount': deposit_addr.minimum_deposit_amount,
             'chain': deposit_addr.chain,
             'expires_at': result.expires_at,
         })
